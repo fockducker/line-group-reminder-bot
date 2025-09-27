@@ -21,17 +21,29 @@ PORT = int(os.getenv('PORT', 8000))
 
 # ตรวจสอบว่ามี required environment variables
 if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
-    print("Error: LINE_CHANNEL_ACCESS_TOKEN (หรือ CHANNEL_ACCESS_TOKEN) และ LINE_CHANNEL_SECRET (หรือ CHANNEL_SECRET) จำเป็นต้องตั้งค่าใน environment variables")
-    exit(1)
+    print("Warning: LINE_CHANNEL_ACCESS_TOKEN และ LINE_CHANNEL_SECRET ไม่ได้ตั้งค่า")
+    print("LINE webhook จะไม่ทำงาน แต่ app จะรันต่อเพื่อให้ตั้งค่าได้")
+    # ไม่ exit เพื่อให้สามารถเข้า health check ได้
+    CHANNEL_ACCESS_TOKEN = "dummy"
+    CHANNEL_SECRET = "dummy"
 
 # สร้าง Configuration และ MessagingApi สำหรับ v3
-configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-api_client = ApiClient(configuration)
-line_bot_api = MessagingApi(api_client)
-handler = WebhookHandler(CHANNEL_SECRET)
-
-# ลงทะเบียน event handlers
-register_handlers(handler, line_bot_api)
+try:
+    configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
+    api_client = ApiClient(configuration)
+    line_bot_api = MessagingApi(api_client)
+    handler = WebhookHandler(CHANNEL_SECRET)
+    
+    # ลงทะเบียน event handlers เฉพาะเมื่อมี tokens จริง
+    if CHANNEL_ACCESS_TOKEN != "dummy" and CHANNEL_SECRET != "dummy":
+        register_handlers(handler, line_bot_api)
+        print("LINE Bot handlers registered successfully")
+    else:
+        print("Skipping LINE Bot handler registration due to missing credentials")
+except Exception as e:
+    print(f"Error initializing LINE Bot: {e}")
+    handler = None
+    line_bot_api = None
 
 
 @app.route('/healthz', methods=['GET'])
@@ -65,6 +77,14 @@ def run_scheduler_endpoint():
 @app.route('/callback', methods=['POST'])
 def callback():
     """Webhook endpoint สำหรับรับข้อความจาก LINE"""
+    
+    # ตรวจสอบว่ามี LINE Bot handler หรือไม่
+    if not handler or CHANNEL_ACCESS_TOKEN == "dummy":
+        return jsonify({
+            'status': 'error',
+            'message': 'LINE Bot not configured. Please set environment variables.'
+        }), 500
+    
     # รับ X-Line-Signature header value
     signature = request.headers.get('X-Line-Signature')
     if not signature:
