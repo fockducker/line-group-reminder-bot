@@ -17,7 +17,8 @@ app = Flask(__name__)
 # รองรับทั้งชื่อเดิมและชื่อใหม่สำหรับ Render
 CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN') or os.getenv('CHANNEL_ACCESS_TOKEN')
 CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET') or os.getenv('CHANNEL_SECRET')
-PORT = int(os.getenv('PORT', 8000))
+# Render จะกำหนด PORT อัตโนมัติ หรือใช้ค่าเริ่มต้น
+PORT = int(os.getenv('PORT', 10000))
 
 # ตรวจสอบว่ามี required environment variables
 if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
