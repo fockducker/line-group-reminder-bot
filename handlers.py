@@ -118,6 +118,9 @@ def register_handlers(handler, line_bot_api):
         
         elif message_lower in ['ทดสอบเตือน', 'test notification', 'testnotification']:
             reply_message = handle_test_notification_command(user_id)
+        
+        elif message_lower in ['ทดสอบวันที่', 'test date', 'testdate']:
+            reply_message = handle_test_date_parser_command()
                 
         elif message_lower == 'status':
             reply_message = f'สถานะของบอท:\\nเชื่อมต่อ LINE API สำเร็จ\\nรับข้อความได้ปกติ\\nส่งข้อความตอบกลับได้ปกติ\\nระบบ Scheduler พร้อมใช้งาน\\nContext: {context_type} ({context_id[:10]}...)'
@@ -167,7 +170,39 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
         
         # ถ้ามีข้อมูลเพิ่มเติม ให้ทำการประมวลผลและบันทึกจริง
         else:
-            appointment_text = " ".join(parts[1:])  # ข้อความหลัง "เพิ่มนัด"
+            # ใช้ Smart Parser แยกวิเคราะห์ข้อความ
+            try:
+                from utils.datetime_parser import SmartDateTimeParser
+                parser = SmartDateTimeParser()
+                
+                # แยกข้อมูลการนัดหมาย
+                parsed_info = parser.extract_appointment_info(user_message)
+                
+                if parsed_info.get('error'):
+                    return f"""❌ {parsed_info['error']}
+
+💡 ตัวอย่างการใช้งาน:
+• เพิ่มนัด ตรวจสุขภาพ 2025-01-15 09:00
+• เพิ่มนัด พบหมอ พรุ่งนี้ เช้า
+• เพิ่มนัด นัดฟัน 15/1/25 14:30"""
+                
+                appointment_datetime = parsed_info['datetime']
+                title = parsed_info['title']
+                hospital = parsed_info['hospital']
+                department = parsed_info['department']
+                location = parsed_info['location']
+                
+                logger.info(f"Parsed appointment: {parsed_info}")
+                
+            except ImportError:
+                # Fallback ถ้า parser ไม่มี
+                logger.warning("Smart parser not available, using simple parsing")
+                appointment_text = " ".join(parts[1:])
+                appointment_datetime = datetime.now() + timedelta(days=1)
+                title = appointment_text
+                hospital = "ไม่ระบุ"
+                department = "ทั่วไป"
+                location = "ระบุเพิ่มเติมภายหลัง"
             
             # กำหนด context สำหรับ Google Sheets
             if context_type == "group":
@@ -177,17 +212,15 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 sheets_context = "personal"  
                 group_id_for_model = user_id  # ใช้ user_id สำหรับ personal
             
-            # สร้างการนัดหมายใหม่ (ใช้วันเวลาปัจจุบัน + 1 วันเป็นค่าเริ่มต้น)
-            appointment_datetime = datetime.now() + timedelta(days=1)  # พรุ่งนี้
-            
+            # สร้างการนัดหมายใหม่
             appointment = Appointment(
                 id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
                 group_id=group_id_for_model,
                 datetime_iso=appointment_datetime.isoformat(),
-                hospital="LINE Bot",
-                department="General",
-                note=appointment_text,
-                location="ระบุเพิ่มเติมภายหลัง"
+                hospital=hospital,
+                department=department,
+                note=title,
+                location=location
             )
             
             logger.info(f"Created appointment: {appointment.to_dict()}")
@@ -205,20 +238,26 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 logger.info(f"Add appointment result: {success}")
                 
                 if success:
+                    # แสดงข้อมูลที่ parsed ได้
+                    date_str = appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')
                     return f"""✅ บันทึกนัดหมายสำเร็จ!
 
-📝 ชื่อนัดหมาย: "{appointment_text}"
+📝 ชื่อนัดหมาย: "{title}"
 🆔 รหัส: {appointment.id}
-📅 วันที่: {appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')}
+📅 วันเวลา: {date_str}
+🏥 โรงพยาบาล: {hospital}
+🔖 แผนก: {department}
 📍 บริบท: {context_type}
 
 ✨ ข้อมูลถูกบันทึกใน Google Sheets แล้ว
+🔔 ระบบจะแจ้งเตือน 7 วัน และ 1 วันก่อนนัดหมาย
 💡 พิมพ์ "ดูนัด" เพื่อดูรายการทั้งหมด"""
                 else:
                     logger.warning("Failed to save appointment - returned False")
                     return f"""⚠️ บันทึกนัดหมายไม่สำเร็จ
 
-📝 ข้อมูล: "{appointment_text}"
+📝 ข้อมูล: "{title}"
+📅 วันเวลา: {date_str}
 ❌ ไม่สามารถเชื่อมต่อ Google Sheets
 
 🔧 กรุณาตรวจสอบการตั้งค่า Google Sheets
@@ -228,7 +267,7 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 logger.error(f"Error saving appointment: {e}", exc_info=True)
                 return f"""❌ เกิดข้อผิดพลาดในการบันทึก
 
-📝 ข้อมูล: "{appointment_text}"
+📝 ข้อมูล: "{title if 'title' in locals() else user_message}"
 🔍 ข้อผิดพลาด: {str(e)}
 
 💡 กรุณาตรวจสอบการตั้งค่า Google Sheets
@@ -374,6 +413,59 @@ def handle_test_notification_command(user_id: str) -> str:
         
     except Exception as e:
         logger.error(f"Error in test notification: {e}")
+        return f"""❌ เกิดข้อผิดพลาดในการทดสอบ
+
+🔍 รายละเอียด: {str(e)}
+🔧 กรุณาติดต่อผู้ดูแลระบบ"""
+
+
+def handle_test_date_parser_command() -> str:
+    """จัดการคำสั่งทดสอบ Date Parser"""
+    try:
+        from utils.datetime_parser import SmartDateTimeParser
+        from datetime import datetime
+        
+        parser = SmartDateTimeParser()
+        
+        # ทดสอบกรณีต่าง ๆ
+        test_cases = [
+            "ตรวจสุขภาพ 2025-01-15 09:00",
+            "พบหมอ 15/1/25 เช้า", 
+            "นัดฟัน พรุ่งนี้ 14:30",
+            "ตรวจเลือด วันจันทร์หน้า บ่าย"
+        ]
+        
+        result = "🧪 ทดสอบระบบแยกวิเคราะห์วันที่\\n\\n"
+        
+        for i, case in enumerate(test_cases, 1):
+            parsed = parser.extract_appointment_info(f"เพิ่มนัด {case}")
+            if parsed['datetime']:
+                date_str = parsed['datetime'].strftime('%d/%m/%Y %H:%M')
+                result += f"{i}. {case}\\n"
+                result += f"   ➡️ {date_str} | {parsed['title']}\\n\\n"
+            else:
+                result += f"{i}. {case} ❌\\n\\n"
+        
+        result += """✅ ระบบ Smart Parser พร้อมใช้งาน!
+
+💡 รองรับรูปแบบ:
+• 2025-01-15 09:00
+• 15/1/25 เช้า  
+• พรุ่งนี้ 14:30
+• วันจันทร์หน้า บ่าย"""
+        
+        return result
+        
+    except ImportError:
+        return """⚠️ ระบบ Smart Parser ยังไม่พร้อม
+
+🔧 กำลังติดตั้งส่วนประกอบ
+📅 ขณะนี้ใช้วันที่เริ่มต้น (พรุ่งนี้ 09:00)
+
+💡 ระบบจะอัปเดตให้เร็ว ๆ นี้"""
+        
+    except Exception as e:
+        logger.error(f"Error in test date parser: {e}")
         return f"""❌ เกิดข้อผิดพลาดในการทดสอบ
 
 🔍 รายละเอียด: {str(e)}
