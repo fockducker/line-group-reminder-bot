@@ -204,7 +204,9 @@ class SheetsRepository:
             
             appointments = []
             for record in records:
-                # ตรวจสอบว่าเป็นของ user นี้หรือไม่
+                # ตรวจสอบว่าตรงกับ group_id ที่ต้องการหรือไม่
+                # สำหรับ group: user_id จะเป็น group_id จริง
+                # สำหรับ personal: user_id จะเป็น user_id จริง
                 if record.get('group_id') == user_id:
                     try:
                         # สร้าง Appointment object จากข้อมูล

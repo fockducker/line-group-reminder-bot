@@ -312,14 +312,16 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
     try:
         repo = SheetsRepository()
         
-        # กำหนด group_id สำหรับ Google Sheets (ใช้วิธีเดียวกับตอน add)
+        # กำหนด context และ group_id สำหรับ Google Sheets
         if context_type == "group":
+            sheets_context = f"group_{context_id}"
             group_id_for_query = context_id
         else:
+            sheets_context = "personal"
             group_id_for_query = user_id
         
         # ดึงรายการนัดหมาย
-        appointments = repo.get_appointments_by_group(group_id_for_query)
+        appointments = repo.get_appointments(group_id_for_query, sheets_context)
         
         if not appointments:
             return """📋 รายการนัดหมาย
