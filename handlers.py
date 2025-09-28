@@ -4,6 +4,7 @@ Event handlers module for LINE Group Reminder Bot
 """
 
 import logging
+import uuid
 from datetime import datetime, timedelta
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -131,20 +132,60 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
 
 พิมพ์อะไรไปก็ได้! บอทจะช่วยจัดการให้"""
         
-        # ถ้ามีข้อมูลเพิ่มเติม ให้ทำการประมวลผล
+        # ถ้ามีข้อมูลเพิ่มเติม ให้ทำการประมวลผลและบันทึกจริง
         else:
             appointment_text = " ".join(parts[1:])  # ข้อความหลัง "เพิ่มนัด"
             
-            return f"""รับข้อมูลนัดหมายแล้ว!
+            # สร้าง Appointment object
+            # กำหนด context สำหรับ Google Sheets
+            if context_type == "group":
+                sheets_context = f"group_{context_id}"
+            else:
+                sheets_context = "personal"
+            
+            # สร้างการนัดหมายใหม่ (ใช้วันเวลาปัจจุบัน + 1 วันเป็นค่าเริ่มต้น)
+            appointment = Appointment(
+                appointment_id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
+                user_id=user_id,
+                title=appointment_text,
+                description="เพิ่มผ่าน LINE Bot",
+                appointment_date=datetime.now() + timedelta(days=1),  # พรุ่งนี้
+                reminder_time=datetime.now() + timedelta(hours=23),   # แจ้งเตือนอีก 23 ชม.
+                context=sheets_context
+            )
+            
+            # บันทึกลง Google Sheets
+            try:
+                repo = SheetsRepository()
+                success = repo.add_appointment(appointment)
+                
+                if success:
+                    return f"""✅ บันทึกนัดหมายสำเร็จ!
 
-ข้อมูลที่ได้รับ: "{appointment_text}"
+📝 ชื่อนัดหมาย: "{appointment_text}"
+🆔 รหัส: {appointment.id}
+📅 วันที่: {appointment.appointment_date.strftime('%d/%m/%Y %H:%M')}
+📍 บริบท: {context_type}
 
-กำลังประมวลผล...
-- วิเคราะห์วันเวลา
-- จัดรูปแบบข้อมูล
-- เตรียมบันทึกลง Google Sheets
+✨ ข้อมูลถูกบันทึกใน Google Sheets แล้ว
+💡 พิมพ์ "ดูนัด" เพื่อดูรายการทั้งหมด"""
+                else:
+                    return f"""⚠️ บันทึกนัดหมายไม่สำเร็จ
 
-ฟีเจอร์การประมวลผลกำลังพัฒนาอยู่"""
+📝 ข้อมูล: "{appointment_text}"
+❌ ไม่สามารถเชื่อมต่อ Google Sheets
+
+🔧 กรุณาตรวจสอบการตั้งค่า Google Sheets
+💡 หรือลองใหม่อีกครั้ง"""
+                    
+            except Exception as e:
+                logger.error(f"Error saving appointment: {e}")
+                return f"""❌ เกิดข้อผิดพลาดในการบันทึก
+
+📝 ข้อมูล: "{appointment_text}"
+🔍 ข้อผิดพลาด: {str(e)}
+
+💡 กรุณาตรวจสอบการตั้งค่า Google Sheets"""
         
     except Exception as e:
         logger.error(f"Error in handle_add_appointment_command: {e}")
