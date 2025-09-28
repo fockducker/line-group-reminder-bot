@@ -43,8 +43,18 @@ class SheetsRepository:
             # ตรวจสอบว่ามี credentials หรือไม่
             credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
             if not credentials_json:
-                logger.warning("Google Sheets credentials not found. Using fallback mode.")
+                logger.error("GOOGLE_CREDENTIALS_JSON environment variable not found!")
+                logger.error("Available env vars: " + str(list(os.environ.keys())))
                 return
+            
+            logger.info(f"Found credentials JSON (length: {len(credentials_json)} chars)")
+            
+            # ตรวจสอบ spreadsheet_id
+            if not self.spreadsheet_id:
+                logger.error("GOOGLE_SPREADSHEET_ID environment variable not found!")
+                return
+            
+            logger.info(f"Using spreadsheet ID: {self.spreadsheet_id}")
             
             # Parse credentials จาก environment variable
             credentials_data = json.loads(credentials_json)
@@ -130,10 +140,15 @@ class SheetsRepository:
             return False
         
         try:
-            # ใช้ group_id เป็น context
-            context = "personal" if appointment.group_id else "personal"
+            # กำหนด context ตาม group_id
             if appointment.group_id and appointment.group_id.startswith('C'):
+                # LINE Group ID เริ่มต้นด้วย 'C'
                 context = f"group_{appointment.group_id}"
+            else:
+                # Personal appointment
+                context = "personal"
+            
+            logger.info(f"Determined context: {context} for group_id: {appointment.group_id}")
             
             worksheet = self._get_worksheet(context)
             if not worksheet:

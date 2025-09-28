@@ -162,8 +162,11 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
             # บันทึกลง Google Sheets
             try:
                 logger.info(f"Attempting to save appointment with context: {sheets_context}")
+                logger.info(f"Appointment data: {appointment.to_dict()}")
+                
                 repo = SheetsRepository()
-                logger.info("SheetsRepository created successfully")
+                logger.info(f"SheetsRepository created successfully. Connected: {repo.gc is not None}")
+                logger.info(f"Spreadsheet available: {repo.spreadsheet is not None}")
                 
                 success = repo.add_appointment(appointment)
                 logger.info(f"Add appointment result: {success}")
