@@ -191,6 +191,7 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 
                 appointment_datetime = parsed_info['datetime']
                 title = parsed_info['title']
+                doctor = parsed_info.get('doctor', 'ไม่ระบุ')
                 hospital = parsed_info['hospital']
                 department = parsed_info['department']
                 location = parsed_info['location']
@@ -203,6 +204,7 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 appointment_text = " ".join(parts[1:])
                 appointment_datetime = datetime.now() + timedelta(days=1)
                 title = appointment_text
+                doctor = "ไม่ระบุ"
                 hospital = "ไม่ระบุ"
                 department = "ทั่วไป"
                 location = "ระบุเพิ่มเติมภายหลัง"
@@ -216,6 +218,11 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 group_id_for_model = user_id  # ใช้ user_id สำหรับ personal
             
             # สร้างการนัดหมายใหม่
+            # ใช้ location field เก็บข้อมูลหมอ
+            location_with_doctor = location
+            if doctor != "ไม่ระบุ":
+                location_with_doctor = f"{doctor} | {location}" if location else doctor
+            
             appointment = Appointment(
                 id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
                 group_id=group_id_for_model,
@@ -223,7 +230,7 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 hospital=hospital,
                 department=department,
                 note=title,
-                location=location
+                location=location_with_doctor
             )
             
             logger.info(f"Created appointment: {appointment.to_dict()}")
@@ -243,11 +250,19 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 if success:
                     # แสดงข้อมูลที่ parsed ได้
                     date_str = appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')
-                    return f"""✅ บันทึกนัดหมายสำเร็จ!
+                    
+                    # สร้างข้อความตอบกลับ
+                    result_message = f"""✅ บันทึกนัดหมายสำเร็จ!
 
 📝 ชื่อนัดหมาย: "{title}"
 🆔 รหัส: {appointment.id}
-📅 วันเวลา: {date_str}
+📅 วันเวลา: {date_str}"""
+                    
+                    # เพิ่มชื่อหมอถ้ามี
+                    if doctor != "ไม่ระบุ":
+                        result_message += f"\n👨‍⚕️ แพทย์: {doctor}"
+                    
+                    result_message += f"""
 🏥 โรงพยาบาล: {hospital}
 🔖 แผนก: {department}
 📍 บริบท: {context_type}
@@ -255,6 +270,8 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
 ✨ ข้อมูลถูกบันทึกใน Google Sheets แล้ว
 🔔 ระบบจะแจ้งเตือน 7 วัน และ 1 วันก่อนนัดหมาย
 💡 พิมพ์ "ดูนัด" เพื่อดูรายการทั้งหมด"""
+                    
+                    return result_message
                 else:
                     logger.warning("Failed to save appointment - returned False")
                     return f"""⚠️ บันทึกนัดหมายไม่สำเร็จ

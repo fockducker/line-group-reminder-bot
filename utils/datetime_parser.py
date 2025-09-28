@@ -52,6 +52,15 @@ class SmartDateTimeParser:
             'sunday': r'(วันอาทิตย์|อาทิตย์|sunday)',
         }
         
+        # Pattern สำหรับชื่อหมอ
+        self.doctor_patterns = {
+            # Doctor titles and names
+            'doctor_title': r'(นพ\.|นพ|ดร\.|ดอกเตอร์|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.)',
+            'doctor_with_name': r'(นพ\.|นพ|ดร\.|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.)\s*([ก-๙a-zA-Z\s]+)',
+            'simple_doctor': r'หมอ([ก-๙a-zA-Z]+)',
+            'doctor_specialty': r'หมอ(โรค[ก-๙]+|[ก-๙]+โรค|เด็ก|ตา|หู|คอ|จมูก|ฟัน|หัวใจ|ไต|กระดูก)',
+        }
+        
         # Pattern สำหรับเวลา
         self.time_patterns = {
             # 24-hour format: 14:30, 09:00
@@ -238,6 +247,50 @@ class SmartDateTimeParser:
         
         return None, text
     
+    def _parse_doctor_info(self, text: str) -> Tuple[Optional[str], str]:
+        """แยกวิเคราะห์ข้อมูลหมอจากข้อความ"""
+        
+        text_original = text
+        doctor_name = None
+        
+        # 1. ตรวจหา doctor with full name (นพ.สมชาย, ดร.วิชัย)
+        for pattern_name, pattern in self.doctor_patterns.items():
+            if pattern_name == 'doctor_with_name':
+                match = re.search(pattern, text)
+                if match:
+                    title = match.group(1)
+                    name = match.group(2).strip()
+                    doctor_name = f"{title}{name}"
+                    # ลบข้อมูลหมอออกจากข้อความ
+                    text = text[:match.start()] + text[match.end():]
+                    return doctor_name, text.strip()
+        
+        # 2. ตรวจหา simple doctor (หมอแดง)
+        match = re.search(self.doctor_patterns['simple_doctor'], text)
+        if match:
+            name = match.group(1).strip()
+            doctor_name = f"หมอ{name}"
+            text = text[:match.start()] + text[match.end():]
+            return doctor_name, text.strip()
+        
+        # 3. ตรวจหา doctor specialty (หมอโรคหัวใจ)
+        match = re.search(self.doctor_patterns['doctor_specialty'], text)
+        if match:
+            specialty = match.group(1).strip()
+            doctor_name = f"หมอ{specialty}"
+            text = text[:match.start()] + text[match.end():]
+            return doctor_name, text.strip()
+        
+        # 4. ตรวจหา doctor title only (หมอ, นพ, ดร)
+        match = re.search(self.doctor_patterns['doctor_title'], text)
+        if match:
+            title = match.group(1).strip()
+            doctor_name = title
+            text = text[:match.start()] + text[match.end():]
+            return doctor_name, text.strip()
+        
+        return None, text
+    
     def extract_appointment_info(self, message: str) -> Dict[str, Any]:
         """
         แยกข้อมูลการนัดหมายจากข้อความ
@@ -273,6 +326,9 @@ class SmartDateTimeParser:
         # แยกวันที่และเวลา
         parsed_datetime, remaining_text = self.parse_datetime(clean_message)
         
+        # แยกข้อมูลหมอ
+        doctor_name, remaining_text = self._parse_doctor_info(remaining_text)
+        
         # แยกข้อมูลเพิ่มเติม
         parts = remaining_text.split()
         
@@ -294,11 +350,20 @@ class SmartDateTimeParser:
             hospital = ' '.join(hospital_parts)
         
         # ส่วนที่เหลือเป็นชื่อการนัดหมาย
-        title = ' '.join(other_parts) if other_parts else 'นัดหมาย'
+        title_parts = other_parts if other_parts else ['นัดหมาย']
+        
+        # ถ้ามีชื่อหมอ ให้รวมเข้าไปในชื่อการนัดหมาย
+        if doctor_name:
+            title = f"พบ {doctor_name}"
+            if other_parts:
+                title += f" ({' '.join(other_parts)})"
+        else:
+            title = ' '.join(title_parts)
         
         return {
             'datetime': parsed_datetime,
             'title': title,
+            'doctor': doctor_name if doctor_name else 'ไม่ระบุ',
             'location': hospital,
             'hospital': hospital if hospital else 'ไม่ระบุ',
             'department': 'ทั่วไป',
@@ -312,11 +377,11 @@ def test_parser():
     
     test_cases = [
         "ตรวจสุขภาพประจำปี 2025-01-15 09:00 โรงพยาบาลราชวิถี",
-        "พบหมอ 15/1/25 เช้า",
-        "นัดฟัน พรุ่งนี้ 14:30",
-        "ตรวจเลือด วันจันทร์หน้า เวลา 10 โมงเช้า",
-        "ทดสอบการทำงาน วันนี้ บ่าย",
-        "ผ่าตัด 25/12/2024 เที่ยง โรงพยาบาลจุฬา"
+        "พบ นพ.สมชาย 15/1/25 เช้า",
+        "นัดฟัน ดร.วิชัย พรุ่งนี้ 14:30",
+        "ตรวจเลือด หมอแดง วันจันทร์หน้า เวลา 10 โมงเช้า",
+        "พบ หมอโรคหัวใจ วันนี้ บ่าย",
+        "ผ่าตัด พศ.อำนาจ 25/12/2024 เที่ยง โรงพยาบาลจุฬา"
     ]
     
     for test_case in test_cases:
