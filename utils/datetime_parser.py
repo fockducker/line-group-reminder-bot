@@ -345,10 +345,14 @@ class SmartDateTimeParser:
         try:
             # ลองหลายรูปแบบ
             formats = [
-                '%d %B %Y %H:%M',  # 8 ตุลาคม 2025 14:00
-                '%d/%m/%Y %H:%M',  # 8/10/2025 14:00
-                '%d-%m-%Y %H:%M',  # 8-10-2025 14:00
-                '%Y-%m-%d %H:%M',  # 2025-10-8 14:00
+                '%d %B %Y %H:%M',    # 8 ตุลาคม 2025 14:00
+                '%d %B %Y %H.%M',    # 8 ตุลาคม 2025 14.00
+                '%d/%m/%Y %H:%M',    # 8/10/2025 14:00
+                '%d/%m/%Y %H.%M',    # 8/10/2025 14.00
+                '%d-%m-%Y %H:%M',    # 8-10-2025 14:00
+                '%d-%m-%Y %H.%M',    # 8-10-2025 14.00
+                '%Y-%m-%d %H:%M',    # 2025-10-8 14:00
+                '%Y-%m-%d %H.%M',    # 2025-10-8 14.00
             ]
             
             # แปลงชื่อเดือนไทยเป็นภาษาอังกฤษ
@@ -390,17 +394,33 @@ class SmartDateTimeParser:
             
         logger.info(f"Parsing complex appointment: {text}")
         
-        # แยกวันที่ (ใช้ Unicode range สำหรับตัวอักษรไทย)
-        date_match = re.search(r'วันที่\s*(\d{1,2})\s*([\u0E01-\u0E5B]+)\s*(\d{4})', text)
-        if not date_match:
-            return None
+        # แยกวันที่ (รองรับทั้ง DD/MM/YYYY และ DD เดือนไทย YYYY)
+        date_match = re.search(r'วันที่\s*(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})', text)
+        if date_match:
+            # รูปแบบ DD/MM/YYYY หรือ DD-MM-YYYY
+            day = int(date_match.group(1))
+            month = int(date_match.group(2))
+            year = int(date_match.group(3))
+        else:
+            # รูปแบบ DD เดือนไทย YYYY
+            date_match = re.search(r'วันที่\s*(\d{1,2})\s*([\u0E01-\u0E5B]+)\s*(\d{4})', text)
+            if not date_match:
+                return None
+                
+            day = int(date_match.group(1))
+            month_thai = date_match.group(2)
+            year = int(date_match.group(3))
             
-        day = int(date_match.group(1))
-        month_thai = date_match.group(2)
-        year = int(date_match.group(3))
+            # แปลงเดือนไทยเป็นตัวเลข
+            thai_months = {
+                'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+                'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+                'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+            }
+            month = thai_months.get(month_thai, 1)
         
-        # แยกเวลา
-        time_match = re.search(r'เวลา\s*(\d{1,2})\.(\d{2})', text)
+        # แยกเวลา (รองรับทั้งจุดและโคลอน)
+        time_match = re.search(r'เวลา\s*(\d{1,2})[.:](\d{2})', text)
         if not time_match:
             return None
             
@@ -425,16 +445,6 @@ class SmartDateTimeParser:
         doctor_match = re.search(r'พบ\s*(.+?)$', text)
         doctor_name = doctor_match.group(1).strip() if doctor_match else "ไม่ระบุ"
         
-
-        
-        # แปลงเดือนภาษาไทยเป็นตัวเลข
-        thai_months = {
-            'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
-            'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
-            'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
-        }
-        
-        month = thai_months.get(month_thai, 1)
         
         # สร้าง datetime object
         try:
