@@ -324,13 +324,15 @@ class SmartDateTimeParser:
         hospital_match = re.search(r'โรงพยาบาล\s*([^\s]+(?:\s+[^\s]+)*?)(?:\s+แผนก|\s*$)', text)
         hospital_name = hospital_match.group(1).strip() if hospital_match else "ไม่ระบุ"
         
-        # แยกแผนก
-        dept_match = re.search(r'แผนก\s*([^นัด]+?)(?:\s*นัด|$)', text)
+        # แยกแผนก (หลัง "แผนก" จนถึงคำถัดไป)
+        dept_match = re.search(r'แผนก\s*([^\s]+(?:\s+[^\s]+)*?)(?:\s+(?:ตรวจ|ปรึกษา|นัด|พบ)|$)', text)
         department_name = dept_match.group(1).strip() if dept_match else "ทั่วไป"
         
-        # แยกหัวข้อการนัด
-        title_match = re.search(r'นัด([^พบ]+?)(?:\s*พบ|$)', text)
-        appointment_title = title_match.group(1).strip() if title_match else "ติดตามพัฒนาการ"
+        # แยกหัวข้อการนัด (หาคำที่อยู่หลังแผนกแต่ก่อน "พบ")
+        # Pattern: หลังแผนก [department] [title words] พบ
+        remaining_after_dept = re.sub(r'.*?แผนก\s*[^\s]+(?:\s+[^\s]+)*?\s+', '', text)
+        title_match = re.search(r'^([^พบ]+?)(?:\s*พบ|$)', remaining_after_dept)
+        appointment_title = title_match.group(1).strip() if title_match else "การนัดหมาย"
         
         # แยกชื่อหมอ
         doctor_match = re.search(r'พบ\s*(.+?)$', text)
@@ -462,7 +464,8 @@ def test_parser():
         "ตรวจเลือด หมอแดง วันจันทร์หน้า เวลา 10 โมงเช้า",
         "พบ หมอโรคหัวใจ วันนี้ บ่าย",
         "ผ่าตัด พศ.อำนาจ 25/12/2024 เที่ยง โรงพยาบาลจุฬา",
-        "วันที่ 1 ตุลาคม 2025 เวลา 13.00 โรงพยาบาล ศิริราชปิยะการุณย์  แผนก กุมารเวชกรรม นัดติดตามพัฒนาการ พบ พญ. เนตรวิมล นันทิวัฒน์"
+        "วันที่ 1 ตุลาคม 2025 เวลา 13.00 โรงพยาบาล ศิริราชปิยะการุณย์  แผนก กุมารเวชกรรม นัดติดตามพัฒนาการ พบ พญ. เนตรวิมล นันทิวัฒน์",
+        "วันที่ 8 ตุลาคม 2025 เวลา 14.00 โรงพยาบาล ศิริราชปิยะการุณย์  แผนก คลินิกทันตกรรม ปรึกษาตรวจฟัน พบ ทพญ. ปารัช ศิริวิชยกุล"
     ]
     
     for test_case in test_cases:
