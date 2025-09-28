@@ -4,7 +4,6 @@ Event handlers module for LINE Group Reminder Bot
 """
 
 import logging
-import uuid
 from datetime import datetime, timedelta
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -117,86 +116,22 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
         
         # ถ้าพิมพ์แค่ "เพิ่มนัด" ให้แสดงคำแนะนำ
         if len(parts) <= 1:
-            return """การเพิ่มนัดหมายใหม่
-
-วิธีใช้งาน:
-
-แบบเต็ม:
-เพิ่มนัด ตรวจสุขภาพประจำปี 2025-01-15 09:00 โรงพยาบาลราชวิถี
-
-แบบง่าย:
-เพิ่มนัด พบแพทย์ 15/1/25 เช้า
-
-แบบสั้น:
-เพิ่มนัด นัดหมอ พรุ่งนี้
-
-พิมพ์อะไรไปก็ได้! บอทจะช่วยจัดการให้"""
+            return "การเพิ่มนัดหมายใหม่\\n\\nวิธีใช้งาน:\\n\\nแบบเต็ม:\\nเพิ่มนัด ตรวจสุขภาพประจำปี 2025-01-15 09:00 โรงพยาบาลราชวิถี\\n\\nแบบง่าย:\\nเพิ่มนัด พบแพทย์ 15/1/25 เช้า\\n\\nแบบสั้น:\\nเพิ่มนัด นัดหมอ พรุ่งนี้\\n\\nพิมพ์อะไรไปก็ได้! บอทจะช่วยจัดการให้"
         
-        # ถ้ามีข้อมูลเพิ่มเติม ให้ทำการประมวลผลและบันทึกจริง
+        # ถ้ามีข้อมูลเพิ่มเติม ให้ทำการประมวลผล
         else:
             appointment_text = " ".join(parts[1:])  # ข้อความหลัง "เพิ่มนัด"
             
-            # กำหนด context สำหรับ Google Sheets
-            if context_type == "group":
-                sheets_context = f"group_{context_id}"
-                group_id_for_model = context_id
-            else:
-                sheets_context = "personal"  
-                group_id_for_model = user_id  # ใช้ user_id สำหรับ personal
-            
-            # สร้างการนัดหมายใหม่ (ใช้วันเวลาปัจจุบัน + 1 วันเป็นค่าเริ่มต้น)
-            appointment_datetime = datetime.now() + timedelta(days=1)  # พรุ่งนี้
-            
-            appointment = Appointment(
-                id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
-                group_id=group_id_for_model,
-                datetime_iso=appointment_datetime.isoformat(),
-                hospital="LINE Bot",
-                department="General",
-                note=appointment_text,
-                location="ระบุเพิ่มเติมภายหลัง"
-            )
-            
-            logger.info(f"Created appointment: {appointment.to_dict()}")
-            
-            # บันทึกลง Google Sheets
-            try:
-                logger.info(f"Attempting to save appointment with context: {sheets_context}")
-                repo = SheetsRepository()
-                logger.info("SheetsRepository created successfully")
-                
-                success = repo.add_appointment(appointment)
-                logger.info(f"Add appointment result: {success}")
-                
-                if success:
-                    return f"""✅ บันทึกนัดหมายสำเร็จ!
+            return f"""รับข้อมูลนัดหมายแล้ว!
 
-📝 ชื่อนัดหมาย: "{appointment_text}"
-🆔 รหัส: {appointment.id}
-📅 วันที่: {appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')}
-📍 บริบท: {context_type}
+ข้อมูลที่ได้รับ: "{appointment_text}"
 
-✨ ข้อมูลถูกบันทึกใน Google Sheets แล้ว
-💡 พิมพ์ "ดูนัด" เพื่อดูรายการทั้งหมด"""
-                else:
-                    logger.warning("Failed to save appointment - returned False")
-                    return f"""⚠️ บันทึกนัดหมายไม่สำเร็จ
+กำลังประมวลผล...
+- วิเคราะห์วันเวลา
+- จัดรูปแบบข้อมูล
+- เตรียมบันทึกลง Google Sheets
 
-📝 ข้อมูล: "{appointment_text}"
-❌ ไม่สามารถเชื่อมต่อ Google Sheets
-
-🔧 กรุณาตรวจสอบการตั้งค่า Google Sheets
-💡 หรือลองใหม่อีกครั้ง"""
-                    
-            except Exception as e:
-                logger.error(f"Error saving appointment: {e}", exc_info=True)
-                return f"""❌ เกิดข้อผิดพลาดในการบันทึก
-
-📝 ข้อมูล: "{appointment_text}"
-🔍 ข้อผิดพลาด: {str(e)}
-
-💡 กรุณาตรวจสอบการตั้งค่า Google Sheets
-🔧 ดู logs ใน Render Dashboard สำหรับรายละเอียด"""
+ฟีเจอร์การประมวลผลกำลังพัฒนาอยู่"""
         
     except Exception as e:
         logger.error(f"Error in handle_add_appointment_command: {e}")
@@ -228,14 +163,12 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
         appointment_list = "รายการนัดหมายของคุณ\\n\\n"
         
         for i, appointment in enumerate(appointments, 1):
-            date_str = appointment.appointment_datetime.strftime("%d/%m/%Y %H:%M")
-            appointment_list += f"{i}. {appointment.note}\\n"
+            date_str = appointment.appointment_date.strftime("%d/%m/%Y %H:%M")
+            appointment_list += f"{i}. {appointment.title}\\n"
             appointment_list += f"   วันที่: {date_str}\\n"
-            if appointment.hospital and appointment.hospital != "LINE Bot":
-                appointment_list += f"   โรงพยาบาล: {appointment.hospital}\\n"
-            if appointment.department and appointment.department != "General":
-                appointment_list += f"   แผนก: {appointment.department}\\n"
-            appointment_list += f"   รหัส: {appointment.id}...\\n\\n"
+            if appointment.description:
+                appointment_list += f"   รายละเอียด: {appointment.description}\\n"
+            appointment_list += f"   รหัส: {appointment.id[:8]}...\\n\\n"
         
         return appointment_list + "พิมพ์ 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย"
         

@@ -102,9 +102,9 @@ class SheetsRepository:
                 )
                 # เพิ่ม header row
                 headers = [
-                    'appointment_id', 'user_id', 'title', 'description', 
-                    'appointment_date', 'reminder_time', 'context',
-                    'notified', 'created_at', 'updated_at'
+                    'id', 'group_id', 'datetime_iso', 'hospital', 'department',
+                    'note', 'location', 'lead_days', 'notified_flags',
+                    'created_at', 'updated_at'
                 ]
                 worksheet.append_row(headers)
                 logger.info(f"Created new worksheet: {worksheet_name}")
@@ -130,33 +130,38 @@ class SheetsRepository:
             return False
         
         try:
-            worksheet = self._get_worksheet(appointment.context)
+            # ใช้ group_id เป็น context
+            context = "personal" if appointment.group_id else "personal"
+            if appointment.group_id and appointment.group_id.startswith('C'):
+                context = f"group_{appointment.group_id}"
+            
+            worksheet = self._get_worksheet(context)
             if not worksheet:
-                logger.error(f"Cannot get worksheet for context: {appointment.context}")
+                logger.error(f"Cannot get worksheet for context: {context}")
                 return False
             
             # แปลง Appointment object เป็น row data
-            now = datetime.now().isoformat()
             row_data = [
                 appointment.id,
-                appointment.user_id,
-                appointment.title,
-                appointment.description,
-                appointment.appointment_date.isoformat(),
-                appointment.reminder_time.isoformat(),
-                appointment.context,
-                str(appointment.notified).lower(),
-                now,  # created_at
-                now   # updated_at
+                appointment.group_id,
+                appointment.datetime_iso,
+                appointment.hospital,
+                appointment.department,
+                appointment.note,
+                appointment.location,
+                str(appointment.lead_days),  # Convert list to string
+                str(appointment.notified_flags),  # Convert list to string
+                appointment.created_at,
+                appointment.updated_at
             ]
             
             # เพิ่มข้อมูลลงใน worksheet
             worksheet.append_row(row_data)
-            logger.info(f"Successfully added appointment ID: {appointment.id} for user: {appointment.user_id}")
+            logger.info(f"Successfully added appointment ID: {appointment.id} for group: {appointment.group_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Error adding appointment: {e}")
+            logger.error(f"Error adding appointment: {e}", exc_info=True)
             return False
 
     def get_appointments(self, user_id: str, context: str) -> List[Appointment]:
@@ -184,18 +189,26 @@ class SheetsRepository:
             
             appointments = []
             for record in records:
-                if record.get('user_id') == user_id and record.get('context') == context:
+                # ตรวจสอบว่าเป็นของ user นี้หรือไม่
+                if record.get('group_id') == user_id:
                     try:
                         # สร้าง Appointment object จากข้อมูล
+                        # Parse lead_days และ notified_flags จาก string
+                        lead_days = eval(record.get('lead_days', '[7, 3, 1]'))
+                        notified_flags = eval(record.get('notified_flags', '[False, False, False]'))
+                        
                         appointment = Appointment(
-                            appointment_id=record.get('appointment_id'),
-                            user_id=record.get('user_id'),
-                            title=record.get('title'),
-                            description=record.get('description', ''),
-                            appointment_date=datetime.fromisoformat(record.get('appointment_date')),
-                            reminder_time=datetime.fromisoformat(record.get('reminder_time')),
-                            context=record.get('context'),
-                            notified=record.get('notified', 'false').lower() == 'true'
+                            id=record.get('id'),
+                            group_id=record.get('group_id'),
+                            datetime_iso=record.get('datetime_iso'),
+                            hospital=record.get('hospital', ''),
+                            department=record.get('department', ''),
+                            note=record.get('note', ''),
+                            location=record.get('location', ''),
+                            lead_days=lead_days,
+                            notified_flags=notified_flags,
+                            created_at=record.get('created_at', ''),
+                            updated_at=record.get('updated_at', '')
                         )
                         appointments.append(appointment)
                     except Exception as e:
