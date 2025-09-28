@@ -291,6 +291,93 @@ class SmartDateTimeParser:
         
         return None, text
     
+    def _parse_structured_appointment(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        แยกวิเคราะห์ข้อความแบบ structured format:
+        ชื่อนัดหมาย: "..."
+        วันเวลา: "..."
+        แพทย์: "..."
+        โรงพยาบาล: "..."
+        แผนก: "..."
+        """
+        
+        # ตรวจสอบว่ามี structured format หรือไม่
+        if 'ชื่อนัดหมาย:' not in text and 'วันเวลา:' not in text:
+            return None
+            
+        logger.info(f"Parsing structured appointment: {text}")
+        
+        # แยกแต่ละ field
+        title = self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\\n]+)["\']?')
+        datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\\n]+)["\']?')
+        doctor = self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\\n]+)["\']?')
+        hospital = self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\\n]+)["\']?')
+        department = self._extract_field(text, r'แผนก:\s*["\']?([^"\'\\n]+)["\']?')
+        
+        # ตรวจสอบ required fields
+        if not datetime_str:
+            return None
+            
+        # แปลงวันเวลา
+        appointment_dt = self._parse_datetime_string(datetime_str)
+        if not appointment_dt:
+            return None
+        
+        logger.info(f"Structured parsing successful: {appointment_dt.strftime('%d/%m/%Y %H:%M')}")
+        
+        return {
+            'datetime': appointment_dt,
+            'title': title or "การนัดหมาย",
+            'doctor': doctor or "ไม่ระบุ",
+            'location': hospital or "ไม่ระบุ",
+            'hospital': hospital or "ไม่ระบุ",
+            'department': department or "ทั่วไป",
+            'error': None
+        }
+    
+    def _extract_field(self, text: str, pattern: str) -> Optional[str]:
+        """แยก field จาก structured text"""
+        match = re.search(pattern, text, re.IGNORECASE)
+        return match.group(1).strip() if match else None
+        
+    def _parse_datetime_string(self, datetime_str: str) -> Optional[datetime]:
+        """แปลงข้อความวันเวลาเป็น datetime object"""
+        try:
+            # ลองหลายรูปแบบ
+            formats = [
+                '%d %B %Y %H:%M',  # 8 ตุลาคม 2025 14:00
+                '%d/%m/%Y %H:%M',  # 8/10/2025 14:00
+                '%d-%m-%Y %H:%M',  # 8-10-2025 14:00
+                '%Y-%m-%d %H:%M',  # 2025-10-8 14:00
+            ]
+            
+            # แปลงชื่อเดือนไทยเป็นภาษาอังกฤษ
+            thai_to_eng = {
+                'มกราคม': 'January', 'กุมภาพันธ์': 'February', 'มีนาคม': 'March',
+                'เมษายน': 'April', 'พฤษภาคม': 'May', 'มิถุนายน': 'June',
+                'กรกฎาคม': 'July', 'สิงหาคม': 'August', 'กันยายน': 'September',
+                'ตุลาคม': 'October', 'พฤศจิกายน': 'November', 'ธันวาคม': 'December'
+            }
+            
+            datetime_str_en = datetime_str
+            for thai, eng in thai_to_eng.items():
+                datetime_str_en = datetime_str_en.replace(thai, eng)
+            
+            for fmt in formats:
+                try:
+                    dt = datetime.strptime(datetime_str_en, fmt)
+                    return dt.replace(tzinfo=BANGKOK_TZ)
+                except ValueError:
+                    continue
+                    
+            # ถ้าไม่ได้ ลองใช้ parser เดิม
+            parsed_dt, _ = self.parse_datetime(datetime_str)
+            return parsed_dt
+            
+        except Exception as e:
+            logger.error(f"Failed to parse datetime string '{datetime_str}': {e}")
+            return None
+
     def _parse_complex_appointment(self, text: str) -> Optional[Dict[str, Any]]:
         """
         แยกวิเคราะห์ข้อความแต่งแบบซับซ้อน เช่น 
@@ -400,7 +487,12 @@ class SmartDateTimeParser:
                 'error': 'กรุณาระบุรายละเอียดการนัดหมาย'
             }
         
-        # ตรวจสอบรูปแบบข้อความที่ซับซ้อนก่อน
+        # ตรวจสอบรูปแบบ structured format ก่อน
+        structured_result = self._parse_structured_appointment(clean_message)
+        if structured_result:
+            return structured_result
+            
+        # ตรวจสอบรูปแบบข้อความที่ซับซ้อน
         complex_result = self._parse_complex_appointment(clean_message)
         if complex_result:
             return complex_result
