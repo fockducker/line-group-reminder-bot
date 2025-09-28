@@ -291,6 +291,81 @@ class SmartDateTimeParser:
         
         return None, text
     
+    def _parse_complex_appointment(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        แยกวิเคราะห์ข้อความแต่งแบบซับซ้อน เช่น 
+        "วันที่ 1 ตุลาคม 2025 เวลา 13.00 โรงพยาบาล ศิริราชปิยะการุณย์ แผนก กุมารเวชกรรม นัดติดตามพัฒนาการ พบ พญ. เนตรวิมล นันทิวัฒน์"
+        """
+        
+        # ตรวจสอบว่ามี pattern ของข้อความซับซ้อนหรือไม่
+        if 'วันที่' not in text or 'เวลา' not in text or 'โรงพยาบาล' not in text:
+            return None
+            
+        logger.info(f"Parsing complex appointment: {text}")
+        
+        # แยกวันที่ (ใช้ Unicode range สำหรับตัวอักษรไทย)
+        date_match = re.search(r'วันที่\s*(\d{1,2})\s*([\u0E01-\u0E5B]+)\s*(\d{4})', text)
+        if not date_match:
+            return None
+            
+        day = int(date_match.group(1))
+        month_thai = date_match.group(2)
+        year = int(date_match.group(3))
+        
+        # แยกเวลา
+        time_match = re.search(r'เวลา\s*(\d{1,2})\.(\d{2})', text)
+        if not time_match:
+            return None
+            
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+        
+        # แยกโรงพยาบาล (ใช้ Unicode range สำหรับตัวอักษรไทย)
+        hospital_match = re.search(r'โรงพยาบาล\s*([^\s]+(?:\s+[^\s]+)*?)(?:\s+แผนก|\s*$)', text)
+        hospital_name = hospital_match.group(1).strip() if hospital_match else "ไม่ระบุ"
+        
+        # แยกแผนก
+        dept_match = re.search(r'แผนก\s*([^นัด]+?)(?:\s*นัด|$)', text)
+        department_name = dept_match.group(1).strip() if dept_match else "ทั่วไป"
+        
+        # แยกหัวข้อการนัด
+        title_match = re.search(r'นัด([^พบ]+?)(?:\s*พบ|$)', text)
+        appointment_title = title_match.group(1).strip() if title_match else "ติดตามพัฒนาการ"
+        
+        # แยกชื่อหมอ
+        doctor_match = re.search(r'พบ\s*(.+?)$', text)
+        doctor_name = doctor_match.group(1).strip() if doctor_match else "ไม่ระบุ"
+        
+
+        
+        # แปลงเดือนภาษาไทยเป็นตัวเลข
+        thai_months = {
+            'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+            'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+            'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+        }
+        
+        month = thai_months.get(month_thai, 1)
+        
+        # สร้าง datetime object
+        try:
+            appointment_dt = datetime(year, month, day, hour, minute, 0, tzinfo=BANGKOK_TZ)
+        except ValueError as e:
+            logger.error(f"Failed to create datetime: {e}")
+            return None
+        
+        logger.info(f"Complex parsing successful: {appointment_dt.strftime('%d/%m/%Y %H:%M')} at {hospital_name}")
+        
+        return {
+            'datetime': appointment_dt,
+            'title': appointment_title,
+            'doctor': doctor_name,
+            'location': hospital_name,
+            'hospital': hospital_name,
+            'department': department_name,
+            'error': None
+        }
+
     def extract_appointment_info(self, message: str) -> Dict[str, Any]:
         """
         แยกข้อมูลการนัดหมายจากข้อความ
@@ -322,6 +397,11 @@ class SmartDateTimeParser:
                 'department': '',
                 'error': 'กรุณาระบุรายละเอียดการนัดหมาย'
             }
+        
+        # ตรวจสอบรูปแบบข้อความที่ซับซ้อนก่อน
+        complex_result = self._parse_complex_appointment(clean_message)
+        if complex_result:
+            return complex_result
         
         # แยกวันที่และเวลา
         parsed_datetime, remaining_text = self.parse_datetime(clean_message)
@@ -381,7 +461,8 @@ def test_parser():
         "นัดฟัน ดร.วิชัย พรุ่งนี้ 14:30",
         "ตรวจเลือด หมอแดง วันจันทร์หน้า เวลา 10 โมงเช้า",
         "พบ หมอโรคหัวใจ วันนี้ บ่าย",
-        "ผ่าตัด พศ.อำนาจ 25/12/2024 เที่ยง โรงพยาบาลจุฬา"
+        "ผ่าตัด พศ.อำนาจ 25/12/2024 เที่ยง โรงพยาบาลจุฬา",
+        "วันที่ 1 ตุลาคม 2025 เวลา 13.00 โรงพยาบาล ศิริราชปิยะการุณย์  แผนก กุมารเวชกรรม นัดติดตามพัฒนาการ พบ พญ. เนตรวิมล นันทิวัฒน์"
     ]
     
     for test_case in test_cases:
