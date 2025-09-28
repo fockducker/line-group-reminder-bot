@@ -8,6 +8,14 @@ from dotenv import load_dotenv
 from scheduler import run_scheduled_push
 from handlers import register_handlers
 
+# เพิ่ม Notification Service
+try:
+    from notifications.notification_service import NotificationService
+    NOTIFICATION_ENABLED = True
+except ImportError as e:
+    print(f"Warning: Notification service not available: {e}")
+    NOTIFICATION_ENABLED = False
+
 # โหลด environment variables จากไฟล์ .env
 load_dotenv()
 
@@ -29,6 +37,7 @@ if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
     CHANNEL_SECRET = "dummy"
 
 # สร้าง Configuration และ MessagingApi สำหรับ v3
+notification_service = None
 try:
     configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
     api_client = ApiClient(configuration)
@@ -39,6 +48,15 @@ try:
     if CHANNEL_ACCESS_TOKEN != "dummy" and CHANNEL_SECRET != "dummy":
         register_handlers(handler, line_bot_api)
         print("LINE Bot handlers registered successfully")
+        
+        # เริ่มต้น Notification Service
+        if NOTIFICATION_ENABLED:
+            try:
+                notification_service = NotificationService(line_bot_api)
+                notification_service.start_scheduler()
+                print("✅ Notification scheduler started successfully")
+            except Exception as e:
+                print(f"❌ Failed to start notification service: {e}")
     else:
         print("Skipping LINE Bot handler registration due to missing credentials")
 except Exception as e:
@@ -67,6 +85,79 @@ def run_scheduler_endpoint():
             'message': 'scheduler ok',
             'timestamp': now.isoformat()
         }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
+@app.route('/test-notification', methods=['POST', 'GET'])
+def test_notification_endpoint():
+    """ทดสอบระบบแจ้งเตือน"""
+    try:
+        if not notification_service:
+            return jsonify({
+                'status': 'error',
+                'message': 'Notification service not available'
+            }), 503
+        
+        # รับ user_id จาก request (หรือใช้ test user)
+        if request.method == 'POST':
+            data = request.get_json()
+            user_id = data.get('user_id') if data else None
+        else:
+            user_id = request.args.get('user_id')
+        
+        if not user_id:
+            return jsonify({
+                'status': 'error',
+                'message': 'user_id is required'
+            }), 400
+        
+        # ส่งการแจ้งเตือนทดสอบ
+        success = notification_service.send_test_notification(user_id)
+        
+        if success:
+            return jsonify({
+                'status': 'success',
+                'message': f'Test notification sent to {user_id}',
+                'timestamp': datetime.now().isoformat()
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to send test notification'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
+@app.route('/run-notification-check', methods=['GET'])
+def run_notification_check_endpoint():
+    """รัน notification check ทันทีสำหรับทดสอบ"""
+    try:
+        if not notification_service:
+            return jsonify({
+                'status': 'error',
+                'message': 'Notification service not available'
+            }), 503
+        
+        # รัน notification check ทันที
+        notification_service.check_and_send_notifications()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Notification check completed',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+        
     except Exception as e:
         return jsonify({
             'status': 'error',
