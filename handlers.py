@@ -463,10 +463,15 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         from datetime import datetime
         from utils.datetime_parser import SmartDateTimeParser
         
+        logger.info(f"[EDIT] Processing edit command: {user_message}")
+        logger.info(f"[EDIT] User: {user_id}, Context: {context_type}, Context ID: {context_id}")
+        
         # แยกรหัสนัดหมายและข้อมูลที่ต้องการแก้ไข
         # Pattern: แก้ไขนัด [appointment_id] [fields...]
         pattern = r'(?:แก้ไขนัด|แก้นัด|แก้ไขการนัด)\s+([A-Za-z0-9]+)\s*(.*)'
         match = re.search(pattern, user_message, re.IGNORECASE | re.DOTALL)
+        
+        logger.info(f"[EDIT] Regex match result: {match.groups() if match else 'No match'}")
         
         if not match:
             return """❌ รูปแบบไม่ถูกต้อง
@@ -503,16 +508,20 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         repo = SheetsRepository()
         
         # กำหนด context และ group_id สำหรับ Google Sheets
-        # สำหรับคำสั่งแก้ไข ให้หาใน personal appointments ของ user เสมอ
-        # ไม่ว่าจะส่งจาก personal chat หรือ group chat
-        sheets_context = "personal"
-        group_id_for_query = user_id
+        if context_type == "group":
+            sheets_context = f"group_{context_id}"
+            group_id_for_query = context_id
+        else:
+            sheets_context = "personal"
+            group_id_for_query = user_id
+            
+        logger.info(f"[EDIT] Using context: {sheets_context}, group_id: {group_id_for_query}")
         
-        # ดึงรายการนัดหมาย (จาก personal context ของ user)
+        # ดึงรายการนัดหมาย
         appointments = repo.get_appointments(group_id_for_query, sheets_context)
         
         # Debug logging
-        logger.info(f"Edit attempt - Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
+        logger.info(f"[EDIT] Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
         for apt in appointments:
             logger.info(f"Available appointment ID: {apt.id}")
         
