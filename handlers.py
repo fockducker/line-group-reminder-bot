@@ -568,10 +568,13 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
                     
                 elif field_name == 'datetime':
                     # แปลงวันเวลาใหม่
+                    logger.info(f"[EDIT] Parsing datetime: '{new_value}'")
                     new_dt = datetime_parser._parse_datetime_string(new_value)
+                    logger.info(f"[EDIT] Parsed result: {new_dt}")
                     if new_dt:
                         updated_fields['datetime_iso'] = new_dt.isoformat()
                         old_dt = datetime.fromisoformat(target_appointment.datetime_iso.replace('Z', ''))
+                        logger.info(f"[EDIT] Old datetime: {old_dt}, New datetime: {new_dt}")
                         changes_made.append(f"• วันที่: {old_dt.strftime('%d/%m/%Y %H:%M')} → {new_dt.strftime('%d/%m/%Y %H:%M')}")
                     else:
                         return f"""❌ รูปแบบวันเวลาไม่ถูกต้อง: "{new_value}"
