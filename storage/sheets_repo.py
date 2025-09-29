@@ -261,10 +261,10 @@ class SheetsRepository:
                 logger.error(f"Cannot get worksheet for context: {context}")
                 return False
             
-            # ค้นหา row ที่มี appointment_id ตรงกัน
+            # ค้นหา row ที่มี id ตรงกัน
             records = worksheet.get_all_records()
             for i, record in enumerate(records):
-                if record.get('appointment_id') == appointment_id:
+                if record.get('id') == appointment_id:
                     row_index = i + 2  # +1 for 0-based index, +1 for header row
                     
                     # Update เฉพาะคอลัมน์ที่ระบุใน updated_data
@@ -309,10 +309,10 @@ class SheetsRepository:
                 logger.error(f"Cannot get worksheet for context: {context}")
                 return False
             
-            # ค้นหา row ที่มี appointment_id ตรงกัน
+            # ค้นหา row ที่มี id ตรงกัน
             records = worksheet.get_all_records()
             for i, record in enumerate(records):
-                if record.get('appointment_id') == appointment_id:
+                if record.get('id') == appointment_id:
                     row_index = i + 2  # +1 for 0-based index, +1 for header row
                     worksheet.delete_rows(row_index)
                     logger.info(f"Successfully deleted appointment ID: {appointment_id}")

@@ -394,7 +394,7 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
         # หานัดหมายที่ต้องการลบ
         target_appointment = None
         for apt in appointments:
-            if apt.appointment_id == appointment_id:
+            if apt.id == appointment_id:
                 target_appointment = apt
                 break
         
@@ -404,7 +404,7 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 💡 ตรวจสอบรหัสนัดหมายด้วยคำสั่ง "ดูนัด" """
 
         # ลบนัดหมาย
-        success = repo.delete_appointment(appointment_id, user_id, context_type, context_id)
+        success = repo.delete_appointment(appointment_id, context_id)
         
         if success:
             return f"""✅ ลบนัดหมายเรียบร้อย!
@@ -474,7 +474,7 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         # หานัดหมายที่ต้องการแก้ไข
         target_appointment = None
         for apt in appointments:
-            if apt.appointment_id == appointment_id:
+            if apt.id == appointment_id:
                 target_appointment = apt
                 break
         
@@ -545,7 +545,7 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
 แผนก:"อายุรกรรม" """
 
         # อัพเดทนัดหมาย
-        success = repo.update_appointment(appointment_id, updated_fields, user_id, context_type, context_id)
+        success = repo.update_appointment(appointment_id, context_id, updated_fields)
         
         if success:
             changes_text = '\n'.join(changes_made)

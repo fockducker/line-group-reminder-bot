@@ -80,6 +80,54 @@ class Appointment:
         return datetime.fromisoformat(self.datetime_iso)
     
     @property
+    def title(self) -> str:
+        """
+        ชื่อการนัดหมาย (alias สำหรับ note)
+        
+        Returns:
+            str: ชื่อการนัดหมาย
+        """
+        return self.note
+    
+    @property
+    def date(self) -> str:
+        """
+        วันที่นัดหมายในรูปแบบ DD/MM/YYYY
+        
+        Returns:
+            str: วันที่นัดหมาย
+        """
+        return self.appointment_datetime.strftime('%d/%m/%Y')
+    
+    @property
+    def time(self) -> str:
+        """
+        เวลานัดหมายในรูปแบบ HH:MM
+        
+        Returns:
+            str: เวลานัดหมาย
+        """
+        return self.appointment_datetime.strftime('%H:%M')
+    
+    @property
+    def doctor(self) -> str:
+        """
+        ชื่อแพทย์ (ใช้จาก note หรือ department หากไม่มีข้อมูลแยก)
+        
+        Returns:
+            str: ชื่อแพทย์
+        """
+        # ถ้า note มี "พบ" หรือ "ดร." ให้ extract ชื่อแพทย์
+        import re
+        if self.note:
+            # หาคำที่มี "ดร.", "พญ.", "ทพ.", "ทพญ." หรือ "พบ"
+            doctor_match = re.search(r'(?:พบ\s*)?([ดท]?พ?[ญย]?\.?\s*[^\s]+(?:\s+[^\s]+)*)', self.note)
+            if doctor_match:
+                return doctor_match.group(1).strip()
+        
+        return "ไม่ระบุ"
+    
+    @property
     def is_past_due(self) -> bool:
         """
         ตรวจสอบว่านัดหมายผ่านไปแล้วหรือไม่
