@@ -201,7 +201,15 @@ class SheetsRepository:
                 return []
             
             # ดึงข้อมูลทั้งหมดจาก worksheet
-            records = worksheet.get_all_records()
+            try:
+                records = worksheet.get_all_records()
+            except Exception as e:
+                if "header row in the worksheet is not unique" in str(e):
+                    logger.error("Duplicate headers detected in worksheet. Attempting to fix...")
+                    # ลองใช้วิธีแก้ไขโดยการอ่านข้อมูลแบบ manual
+                    return self._get_appointments_manual_headers(worksheet, user_id, context)
+                else:
+                    raise e
             
             appointments = []
             for record in records:
@@ -239,6 +247,88 @@ class SheetsRepository:
             
         except Exception as e:
             logger.error(f"Error retrieving appointments: {e}")
+            return []
+    
+    def _get_appointments_manual_headers(self, worksheet, user_id: str, context: str) -> List[Appointment]:
+        """
+        แก้ไขปัญหา duplicate headers โดยการอ่านข้อมูลแบบ manual
+        
+        Args:
+            worksheet: Google Sheets worksheet object
+            user_id (str): LINE User ID
+            context (str): บริบท
+            
+        Returns:
+            List[Appointment]: รายการนัดหมาย
+        """
+        try:
+            # อ่าน header row แรก
+            all_values = worksheet.get_all_values()
+            if not all_values:
+                return []
+            
+            # หา header row ที่ถูกต้อง (ไม่ซ้ำ)
+            expected_headers = [
+                'id', 'group_id', 'datetime_iso', 'hospital', 'department',
+                'doctor', 'note', 'location', 'lead_days', 'notified_flags',
+                'created_at', 'updated_at'
+            ]
+            
+            header_row_idx = -1
+            for i, row in enumerate(all_values):
+                if row and row[0] == 'id':  # หา row ที่เริ่มต้นด้วย 'id'
+                    header_row_idx = i
+                    break
+            
+            if header_row_idx == -1:
+                logger.error("No valid header row found")
+                return []
+            
+            headers = all_values[header_row_idx]
+            data_rows = all_values[header_row_idx + 1:]
+            
+            appointments = []
+            for row in data_rows:
+                if len(row) < len(headers):
+                    continue  # Skip incomplete rows
+                
+                # สร้าง record dict
+                record = {}
+                for j, header in enumerate(headers):
+                    if j < len(row):
+                        record[header] = row[j]
+                
+                # ตรวจสอบว่าตรงกับ user_id หรือไม่
+                if record.get('group_id') == user_id:
+                    try:
+                        # Parse lead_days และ notified_flags
+                        lead_days = eval(record.get('lead_days', '[7, 3, 1]'))
+                        notified_flags = eval(record.get('notified_flags', '[False, False, False]'))
+                        
+                        appointment = Appointment(
+                            id=record.get('id'),
+                            group_id=record.get('group_id'),
+                            datetime_iso=record.get('datetime_iso'),
+                            hospital=record.get('hospital', ''),
+                            department=record.get('department', ''),
+                            doctor=record.get('doctor', ''),
+                            note=record.get('note', ''),
+                            location=record.get('location', ''),
+                            lead_days=lead_days,
+                            notified_flags=notified_flags,
+                            created_at=record.get('created_at', ''),
+                            updated_at=record.get('updated_at', '')
+                        )
+                        appointments.append(appointment)
+                    except Exception as e:
+                        logger.error(f"Error parsing appointment record: {e}")
+                        continue
+            
+            logger.info(f"Retrieved {len(appointments)} appointments using manual header method")
+            return appointments
+            
+        except Exception as e:
+            logger.error(f"Error in manual header method: {e}")
             return []
     
     def update_appointment(self, appointment_id: str, context: str, updated_data: dict) -> bool:
