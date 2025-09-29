@@ -48,17 +48,16 @@ def register_handlers(handler, line_bot_api):
         # จัดการข้อความและคำสั่งต่าง ๆ
         message_lower = user_message.lower().strip()
         
-        # ถ้าเป็นกลุ่ม ตรวจสอบว่ามี mention หรือไม่
+        # ถ้าเป็นกลุ่ม ตรวจสอบว่าเป็นคำสั่งบอทหรือไม่
         if context_type == "group":
-            # ตรวจสอบว่าข้อความเริ่มด้วย mention หรือไม่
-            if not (message_lower.startswith('@') or 'bot' in message_lower or 
-                   message_lower.startswith(('เพิ่มนัด', 'ดูนัด', 'ลบนัด', 'แก้ไขนัด', 'help', 'คำสั่ง', 'สถานะ', 'เตือน'))):
+            # ตอบเฉพาะคำสั่งที่เกี่ยวข้องกับการจัดการนัดหมาย
+            if not message_lower.startswith(('เพิ่มนัด', 'ดูนัด', 'ลบนัด', 'แก้ไขนัด', 'ยกเลิกนัด', 'ลบการนัด', 'นัดใหม่', 'เพิ่มการนัด', 
+                                           'hello', 'สวัสดี', 'ทักทาย', 'help', 'คำสั่ง', 'สถานะ', 'เตือน', 'ทดสอบ')):
                 # ไม่ใช่คำสั่งสำหรับบอท ให้ข้าม
                 return
             
-            # ลบ mention ออกจากข้อความ (ถ้ามี)
+            # ลบ mention ออกจากข้อความ (ถ้ามี) เพื่อให้ประมวลผลต่อได้
             if message_lower.startswith('@'):
-                # หา space แรกและเอาข้อความหลัง mention
                 space_index = user_message.find(' ')
                 if space_index > 0:
                     user_message = user_message[space_index + 1:].strip()
@@ -236,8 +235,8 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 sheets_context = f"group_{context_id}"
                 group_id_for_model = context_id
             else:
-                sheets_context = "personal"  
-                group_id_for_model = user_id  # ใช้ user_id สำหรับ personal
+                sheets_context = "personal"
+                group_id_for_model = user_id
             
             # สร้างการนัดหมายใหม่
             # ตอนนี้มี doctor field แยกแล้ว ไม่ต้องใส่ใน location
@@ -483,14 +482,12 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         repo = SheetsRepository()
         
         # กำหนด context และ group_id สำหรับ Google Sheets
-        if context_type == "group":
-            sheets_context = f"group_{context_id}"
-            group_id_for_query = context_id
-        else:
-            sheets_context = "personal"
-            group_id_for_query = user_id
+        # สำหรับคำสั่งแก้ไข ให้หาใน personal appointments ของ user เสมอ
+        # ไม่ว่าจะส่งจาก personal chat หรือ group chat
+        sheets_context = "personal"
+        group_id_for_query = user_id
         
-        # ดึงรายการนัดหมาย
+        # ดึงรายการนัดหมาย (จาก personal context ของ user)
         appointments = repo.get_appointments(group_id_for_query, sheets_context)
         
         # Debug logging
