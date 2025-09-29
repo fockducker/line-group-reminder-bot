@@ -364,12 +364,36 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
 
 💡 พิมพ์ "เพิ่มนัด" เพื่อเพิ่มการนัดหมายใหม่"""
         
+        # เรียงลำดับตามวันที่ (ใกล้ที่สุดก่อน - อนาคตก่อน แล้วตามด้วยอดีต)
+        from datetime import datetime
+        now = datetime.now()
+        
+        # แยกนัดหมายออกเป็นอนาคตและอดีต
+        future_appointments = [apt for apt in appointments if apt.appointment_datetime >= now]
+        past_appointments = [apt for apt in appointments if apt.appointment_datetime < now]
+        
+        # เรียงอนาคต: ใกล้ที่สุดก่อน (ascending)
+        future_appointments.sort(key=lambda apt: apt.appointment_datetime)
+        
+        # เรียงอดีต: ล่าสุดก่อน (descending) 
+        past_appointments.sort(key=lambda apt: apt.appointment_datetime, reverse=True)
+        
+        # รวมกัน: อนาคตก่อน แล้วตามด้วยอดีต
+        appointments = future_appointments + past_appointments
+        
         # สร้างรายการนัดหมาย
         appointment_list = "📋 รายการนัดหมายของคุณ\n\n"
         
         for i, appointment in enumerate(appointments, 1):
             date_str = appointment.appointment_datetime.strftime("%d/%m/%Y %H:%M")
-            appointment_list += f"📅 {i}. {appointment.note}\n"
+            
+            # เพิ่ม indicator สำหรับนัดหมายอนาคต/อดีต
+            if appointment.appointment_datetime >= now:
+                status_icon = "🔴"  # นัดหมายใกล้ถึง
+            else:
+                status_icon = "⚪"  # นัดหมายที่ผ่านมาแล้ว
+            
+            appointment_list += f"📅 {i}. {status_icon} {appointment.note}\n"
             appointment_list += f"     🕐 วันที่: {date_str}\n"
             if appointment.hospital and appointment.hospital != "LINE Bot":
                 appointment_list += f"     🏥 โรงพยาบาล: {appointment.hospital}\n"
@@ -379,7 +403,10 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
                 appointment_list += f"     👨‍⚕️ แพทย์: {appointment.doctor}\n"
             appointment_list += f"     🆔 รหัส: {appointment.id}\n\n"
         
-        return appointment_list + "💡 พิมพ์ 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย"
+        return appointment_list + """💡 พิมพ์ 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย
+
+🔴 = นัดหมายที่กำลังจะมาถึง
+⚪ = นัดหมายที่ผ่านมาแล้ว"""
         
     except Exception as e:
         logger.error(f"Error in handle_list_appointments_command: {e}")
