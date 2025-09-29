@@ -171,8 +171,12 @@ def run_notification_check_endpoint():
 def callback():
     """Webhook endpoint สำหรับรับข้อความจาก LINE"""
     
+    print(f"[WEBHOOK] Received callback request")
+    print(f"[WEBHOOK] Headers: {dict(request.headers)}")
+    
     # ตรวจสอบว่ามี LINE Bot handler หรือไม่
     if not handler or CHANNEL_ACCESS_TOKEN == "dummy":
+        print("[WEBHOOK] ERROR: LINE Bot not configured")
         return jsonify({
             'status': 'error',
             'message': 'LINE Bot not configured. Please set environment variables.'
@@ -181,18 +185,26 @@ def callback():
     # รับ X-Line-Signature header value
     signature = request.headers.get('X-Line-Signature')
     if not signature:
+        print("[WEBHOOK] ERROR: Missing X-Line-Signature header")
         abort(400, description="Missing X-Line-Signature header")
     
     # รับ request body เป็น text
     body = request.get_data(as_text=True)
+    print(f"[WEBHOOK] Body length: {len(body)}")
+    print(f"[WEBHOOK] Body: {body[:500]}...")  # แสดง 500 ตัวอักษรแรก
     
     try:
+        print(f"[WEBHOOK] Processing webhook with signature verification...")
         handler.handle(body, signature)
-    except InvalidSignatureError:
-        print("Invalid signature. Please check your channel secret.")
+        print(f"[WEBHOOK] SUCCESS: Webhook processed successfully")
+    except InvalidSignatureError as e:
+        print(f"[WEBHOOK] ERROR: Invalid signature - {e}")
+        print(f"[WEBHOOK] Channel Secret Length: {len(CHANNEL_SECRET) if CHANNEL_SECRET else 'None'}")
         abort(400, description="Invalid signature")
     except Exception as e:
-        print(f"Error handling webhook: {e}")
+        print(f"[WEBHOOK] ERROR: Exception in webhook handling - {e}")
+        import traceback
+        traceback.print_exc()
         abort(500, description="Internal server error")
     
     return 'OK', 200
