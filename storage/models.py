@@ -19,6 +19,7 @@ class Appointment:
         datetime_iso (str): วันเวลานัดหมายในรูปแบบ ISO 8601 (YYYY-MM-DDTHH:MM:SS)
         hospital (str): ชื่อโรงพยาบาล/สถานพยาบาล
         department (str): แผนก/หน่วยงาน
+        doctor (str): ชื่อแพทย์ผู้ให้บริการ
         note (str): หมายเหตุเพิ่มเติม
         location (str): สถานที่/ห้อง/อาคาร
         lead_days (List[int]): จำนวนวันก่อนนัดที่จะแจ้งเตือน เช่น [7, 3, 1]
@@ -46,6 +47,7 @@ class Appointment:
     datetime_iso: str
     hospital: str
     department: str
+    doctor: str = ""
     note: str = ""
     location: str = ""
     lead_days: List[int] = field(default_factory=lambda: [7, 3, 1])
@@ -184,6 +186,7 @@ class Appointment:
             'datetime_iso': self.datetime_iso,
             'hospital': self.hospital,
             'department': self.department,
+            'doctor': self.doctor,
             'note': self.note,
             'location': self.location,
             'lead_days': self.lead_days,

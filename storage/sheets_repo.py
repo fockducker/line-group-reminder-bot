@@ -113,7 +113,7 @@ class SheetsRepository:
                 # เพิ่ม header row
                 headers = [
                     'id', 'group_id', 'datetime_iso', 'hospital', 'department',
-                    'note', 'location', 'lead_days', 'notified_flags',
+                    'doctor', 'note', 'location', 'lead_days', 'notified_flags',
                     'created_at', 'updated_at'
                 ]
                 worksheet.append_row(headers)
@@ -162,6 +162,7 @@ class SheetsRepository:
                 appointment.datetime_iso,
                 appointment.hospital,
                 appointment.department,
+                appointment.doctor,
                 appointment.note,
                 appointment.location,
                 str(appointment.lead_days),  # Convert list to string
@@ -220,6 +221,7 @@ class SheetsRepository:
                             datetime_iso=record.get('datetime_iso'),
                             hospital=record.get('hospital', ''),
                             department=record.get('department', ''),
+                            doctor=record.get('doctor', ''),
                             note=record.get('note', ''),
                             location=record.get('location', ''),
                             lead_days=lead_days,

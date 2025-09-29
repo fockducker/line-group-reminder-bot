@@ -352,6 +352,8 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
                 appointment_list += f"     🏥 โรงพยาบาล: {appointment.hospital}\n"
             if appointment.department and appointment.department != "General":
                 appointment_list += f"     🏢 แผนก: {appointment.department}\n"
+            if getattr(appointment, 'doctor', None) and appointment.doctor:
+                appointment_list += f"     👨‍⚕️ แพทย์: {appointment.doctor}\n"
             appointment_list += f"     🆔 รหัส: {appointment.id}\n\n"
         
         return appointment_list + "💡 พิมพ์ 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย"
@@ -440,6 +442,7 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
     """จัดการคำสั่งแก้ไขการนัดหมาย"""
     try:
         import re
+        from datetime import datetime
         from utils.datetime_parser import SmartDateTimeParser
         
         # แยกรหัสนัดหมายและข้อมูลที่ต้องการแก้ไข
@@ -513,13 +516,13 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         updated_fields = {}
         datetime_parser = SmartDateTimeParser()
         
-        # รองรับฟิลด์ต่าง ๆ
+        # รองรับฟิลด์ต่าง ๆ (รองรับทั้งแบบมี quotes และไม่มี)
         field_patterns = {
-            'title': r'ชื่อนัดหมาย:\s*["\']([^"\']+)["\']',
-            'datetime': r'วันเวลา:\s*["\']([^"\']+)["\']',
-            'doctor': r'แพทย์:\s*["\']([^"\']+)["\']',
-            'hospital': r'โรงพยาบาล:\s*["\']([^"\']+)["\']',
-            'department': r'แผนก:\s*["\']([^"\']+)["\']'
+            'title': r'ชื่อนัดหมาย:\s*["\']?([^"\']+?)["\']?(?:\s|$)',
+            'datetime': r'วันเวลา:\s*["\']?([^"\']+?)["\']?(?:\s|$)',
+            'doctor': r'แพทย์:\s*["\']?([^"\']+?)["\']?(?:\s|$)',
+            'hospital': r'โรงพยาบาล:\s*["\']?([^"\']+?)["\']?(?:\s|$)',
+            'department': r'แผนก:\s*["\']?([^"\']+?)["\']?(?:\s|$)'
         }
         
         changes_made = []
@@ -530,16 +533,16 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
                 new_value = match_field.group(1).strip()
                 
                 if field_name == 'title':
-                    updated_fields['title'] = new_value
-                    changes_made.append(f"• ชื่อนัดหมาย: {target_appointment.title} → {new_value}")
+                    updated_fields['note'] = new_value
+                    changes_made.append(f"• ชื่อนัดหมาย: {getattr(target_appointment, 'note', 'ไม่ระบุ')} → {new_value}")
                     
                 elif field_name == 'datetime':
                     # แปลงวันเวลาใหม่
                     new_dt = datetime_parser._parse_datetime_string(new_value)
                     if new_dt:
-                        updated_fields['date'] = new_dt.strftime('%d/%m/%Y')
-                        updated_fields['time'] = new_dt.strftime('%H:%M')
-                        changes_made.append(f"• วันที่: {target_appointment.date} {target_appointment.time} → {updated_fields['date']} {updated_fields['time']}")
+                        updated_fields['datetime_iso'] = new_dt.isoformat()
+                        old_dt = datetime.fromisoformat(target_appointment.datetime_iso.replace('Z', ''))
+                        changes_made.append(f"• วันที่: {old_dt.strftime('%d/%m/%Y %H:%M')} → {new_dt.strftime('%d/%m/%Y %H:%M')}")
                     else:
                         return f"""❌ รูปแบบวันเวลาไม่ถูกต้อง: "{new_value}"
 
@@ -550,11 +553,11 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
                         
                 elif field_name == 'doctor':
                     updated_fields['doctor'] = new_value
-                    changes_made.append(f"• แพทย์: {target_appointment.doctor} → {new_value}")
+                    changes_made.append(f"• แพทย์: {getattr(target_appointment, 'doctor', 'ไม่ระบุ')} → {new_value}")
                     
                 elif field_name == 'hospital':
-                    updated_fields['location'] = new_value
-                    changes_made.append(f"• โรงพยาบาล: {target_appointment.location} → {new_value}")
+                    updated_fields['hospital'] = new_value
+                    changes_made.append(f"• โรงพยาบาล: {getattr(target_appointment, 'hospital', 'ไม่ระบุ')} → {new_value}")
                     
                 elif field_name == 'department':
                     updated_fields['department'] = new_value
