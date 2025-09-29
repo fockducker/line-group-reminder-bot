@@ -366,7 +366,11 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
         
         # เรียงลำดับตามวันที่ (ใกล้ที่สุดก่อน - อนาคตก่อน แล้วตามด้วยอดีต)
         from datetime import datetime
-        now = datetime.now()
+        import pytz
+        
+        # ใช้ Bangkok timezone เหมือนกับ appointment datetime
+        bangkok_tz = pytz.timezone('Asia/Bangkok')
+        now = datetime.now(bangkok_tz)
         
         # แยกนัดหมายออกเป็นอนาคตและอดีต
         future_appointments = [apt for apt in appointments if apt.appointment_datetime >= now]
