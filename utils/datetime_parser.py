@@ -308,11 +308,11 @@ class SmartDateTimeParser:
         logger.info(f"Parsing structured appointment: {text}")
         
         # แยกแต่ละ field
-        title = self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\\n]+)["\']?')
-        datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\\n]+)["\']?')
-        doctor = self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\\n]+)["\']?')
-        hospital = self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\\n]+)["\']?')
-        department = self._extract_field(text, r'แผนก:\s*["\']?([^"\'\\n]+)["\']?')
+        title = self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\r\n]+)["\']?')
+        datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\r\n]+)["\']?')
+        doctor = self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\r\n]+)["\']?')
+        hospital = self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\r\n]+)["\']?')
+        department = self._extract_field(text, r'แผนก:\s*["\']?([^"\'\r\n]+)["\']?')
         
         # ตรวจสอบ required fields
         if not datetime_str:
