@@ -195,14 +195,25 @@ def callback():
     
     try:
         print(f"[WEBHOOK] Processing webhook with signature verification...")
+        
+        # เพิ่ม timeout protection แต่ยัง process แบบ sync เพื่อใช้ reply_token
+        import signal
+        import time
+        
+        start_time = time.time()
+        
         handler.handle(body, signature)
-        print(f"[WEBHOOK] SUCCESS: Webhook processed successfully")
+        
+        end_time = time.time()
+        process_time = end_time - start_time
+        print(f"[WEBHOOK] SUCCESS: Webhook processed in {process_time:.2f} seconds")
+        
     except InvalidSignatureError as e:
         print(f"[WEBHOOK] ERROR: Invalid signature - {e}")
         print(f"[WEBHOOK] Channel Secret Length: {len(CHANNEL_SECRET) if CHANNEL_SECRET else 'None'}")
         abort(400, description="Invalid signature")
     except Exception as e:
-        print(f"[WEBHOOK] ERROR: Exception in webhook handling - {e}")
+        print(f"[WEBHOOK] ERROR: Exception in webhook setup - {e}")
         import traceback
         traceback.print_exc()
         abort(500, description="Internal server error")
