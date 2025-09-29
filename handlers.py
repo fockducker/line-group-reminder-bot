@@ -10,7 +10,28 @@ from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from storage.models import Appointment
-from storage.sheets_repo import SheetsRepository
+
+# Conditional import สำหรับ SheetsRepository
+try:
+    from storage.sheets_repo import SheetsRepository
+    SHEETS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: SheetsRepository not available: {e}")
+    SHEETS_AVAILABLE = False
+    
+    class DummySheetsRepository:
+        def __init__(self):
+            pass
+        def add_appointment(self, appointment):
+            return False
+        def get_appointments(self, group_id, context):
+            return []
+        def delete_appointment(self, appointment_id, context):
+            return False
+        def update_appointment(self, appointment_id, context, fields):
+            return False
+    
+    SheetsRepository = DummySheetsRepository
 
 # ตั้งค่า logging
 logging.basicConfig(level=logging.INFO)

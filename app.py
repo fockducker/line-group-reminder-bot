@@ -57,6 +57,7 @@ try:
                 print("✅ Notification scheduler started successfully")
             except Exception as e:
                 print(f"❌ Failed to start notification service: {e}")
+                notification_service = None
     else:
         print("Skipping LINE Bot handler registration due to missing credentials")
 except Exception as e:
