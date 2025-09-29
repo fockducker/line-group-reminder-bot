@@ -204,3 +204,23 @@ class Appointment:
             Appointment: instance ของ Appointment
         """
         return cls(**data)
+
+
+# Mock classes สำหรับการทดสอบ
+@dataclass
+class MockSource:
+    """Mock LINE source object for testing"""
+    source_id: str
+    type: str  # 'group' or 'user'
+
+@dataclass  
+class MockEvent:
+    """Mock LINE event object for testing"""
+    source: MockSource
+    message_type: str
+
+@dataclass
+class MockUser:
+    """Mock LINE user object for testing"""
+    user_id: str
+    display_name: str

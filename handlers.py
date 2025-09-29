@@ -388,8 +388,21 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
         # เชื่อมต่อกับ database
         repo = SheetsRepository()
         
+        # กำหนด context และ group_id สำหรับ Google Sheets
+        if context_type == "group":
+            sheets_context = f"group_{context_id}"
+            group_id_for_query = context_id
+        else:
+            sheets_context = "personal"
+            group_id_for_query = user_id
+        
         # ดึงรายการนัดหมาย
-        appointments = repo.get_appointments(user_id, context_id)
+        appointments = repo.get_appointments(group_id_for_query, sheets_context)
+        
+        # Debug logging
+        logger.info(f"Delete attempt - Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
+        for apt in appointments:
+            logger.info(f"Available appointment ID: {apt.id}")
         
         # หานัดหมายที่ต้องการลบ
         target_appointment = None
@@ -404,7 +417,7 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 💡 ตรวจสอบรหัสนัดหมายด้วยคำสั่ง "ดูนัด" """
 
         # ลบนัดหมาย
-        success = repo.delete_appointment(appointment_id, context_id)
+        success = repo.delete_appointment(appointment_id, sheets_context)
         
         if success:
             return f"""✅ ลบนัดหมายเรียบร้อย!
@@ -468,8 +481,21 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         # เชื่อมต่อกับ database
         repo = SheetsRepository()
         
+        # กำหนด context และ group_id สำหรับ Google Sheets
+        if context_type == "group":
+            sheets_context = f"group_{context_id}"
+            group_id_for_query = context_id
+        else:
+            sheets_context = "personal"
+            group_id_for_query = user_id
+        
         # ดึงรายการนัดหมาย
-        appointments = repo.get_appointments(user_id, context_id)
+        appointments = repo.get_appointments(group_id_for_query, sheets_context)
+        
+        # Debug logging
+        logger.info(f"Edit attempt - Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
+        for apt in appointments:
+            logger.info(f"Available appointment ID: {apt.id}")
         
         # หานัดหมายที่ต้องการแก้ไข
         target_appointment = None
@@ -545,7 +571,7 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
 แผนก:"อายุรกรรม" """
 
         # อัพเดทนัดหมาย
-        success = repo.update_appointment(appointment_id, context_id, updated_fields)
+        success = repo.update_appointment(appointment_id, sheets_context, updated_fields)
         
         if success:
             changes_text = '\n'.join(changes_made)
