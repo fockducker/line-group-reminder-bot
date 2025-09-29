@@ -240,10 +240,7 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 group_id_for_model = user_id  # ใช้ user_id สำหรับ personal
             
             # สร้างการนัดหมายใหม่
-            # ใช้ location field เก็บข้อมูลหมอ
-            location_with_doctor = location
-            if doctor != "ไม่ระบุ":
-                location_with_doctor = f"{doctor} | {location}" if location else doctor
+            # ตอนนี้มี doctor field แยกแล้ว ไม่ต้องใส่ใน location
             
             appointment = Appointment(
                 id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
@@ -251,8 +248,9 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 datetime_iso=appointment_datetime.isoformat(),
                 hospital=hospital,
                 department=department,
+                doctor=doctor if doctor != "ไม่ระบุ" else "",
                 note=title,
-                location=location_with_doctor
+                location=location
             )
             
             logger.info(f"Created appointment: {appointment.to_dict()}")

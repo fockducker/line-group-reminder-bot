@@ -33,7 +33,8 @@ def create_test_appointment():
         group_id="test_user_123",  # ใช้ test user
         datetime_iso=test_datetime,
         hospital="โรงพยาบาลทดสอบ",
-        department="แผนกทดสอบ", 
+        department="แผนกทดสอบ",
+        doctor="หมอทดสอบ", 
         note="การนัดทดสอบ",
         location="ห้องทดสอบ"
     )

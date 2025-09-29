@@ -76,6 +76,7 @@ def test_create_appointment():
             datetime_iso=datetime.now().isoformat(),
             hospital="Test Hospital",
             department="Test Department",
+            doctor="Test Doctor",
             note="Test appointment from script"
         )
         

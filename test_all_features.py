@@ -109,6 +109,7 @@ def test_data_models():
             datetime_iso="2025-10-01T14:00:00+07:00",
             hospital="ทดสอบ",
             department="ทดสอบ",
+            doctor="หมอทดสอบ",
             note="ทดสอบ",
             location="ทดสอบ"
         )
