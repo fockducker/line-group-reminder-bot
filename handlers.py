@@ -174,13 +174,18 @@ def register_handlers(handler, line_bot_api):
         
         # ส่งข้อความตอบกลับ
         try:
+            import time
+            reply_start = time.time()
+            
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
                     messages=[TextMessage(text=reply_message)]
                 )
             )
-            logger.info(f"Reply sent successfully: {reply_message[:50]}...")
+            
+            reply_end = time.time()
+            logger.info(f"Reply sent successfully in {reply_end - reply_start:.2f}s: {reply_message[:50]}...")
         except Exception as e:
             logger.error(f"Failed to send reply: {e}")
     
