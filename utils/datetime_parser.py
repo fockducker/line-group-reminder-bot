@@ -343,16 +343,18 @@ class SmartDateTimeParser:
     def _parse_datetime_string(self, datetime_str: str) -> Optional[datetime]:
         """แปลงข้อความวันเวลาเป็น datetime object"""
         try:
+            logger.info(f"[PARSER] Parsing datetime string: '{datetime_str}'")
+            
             # ลองหลายรูปแบบ (เรียงตามความน่าจะเป็น)
             formats = [
-                '%d/%m/%Y %H:%M',    # 29/11/2025 08:50 (รูปแบบหลัก)
-                '%d/%m/%Y %H.%M',    # 29/11/2025 08.50
-                '%Y-%m-%d %H:%M',    # 2025-11-29 08:50
-                '%Y-%m-%d %H.%M',    # 2025-11-29 08.50
-                '%d-%m-%Y %H:%M',    # 29-11-2025 08:50
-                '%d-%m-%Y %H.%M',    # 29-11-2025 08.50
-                '%d %B %Y %H:%M',    # 29 ตุลาคม 2025 08:50
-                '%d %B %Y %H.%M',    # 29 ตุลาคม 2025 08.50
+                '%d/%m/%Y %H:%M',    # 08/10/2025 15:00 (รูปแบบหลัก)
+                '%d/%m/%Y %H.%M',    # 08/10/2025 15.00
+                '%Y-%m-%d %H:%M',    # 2025-10-08 15:00
+                '%Y-%m-%d %H.%M',    # 2025-10-08 15.00
+                '%d-%m-%Y %H:%M',    # 08-10-2025 15:00
+                '%d-%m-%Y %H.%M',    # 08-10-2025 15.00
+                '%d %B %Y %H:%M',    # 08 October 2025 15:00
+                '%d %B %Y %H.%M',    # 08 October 2025 15.00
             ]
             
             # แปลงชื่อเดือนไทยเป็นภาษาอังกฤษ
@@ -367,15 +369,22 @@ class SmartDateTimeParser:
             for thai, eng in thai_to_eng.items():
                 datetime_str_en = datetime_str_en.replace(thai, eng)
             
-            for fmt in formats:
+            logger.info(f"[PARSER] Converted string: '{datetime_str_en}'")
+            
+            for i, fmt in enumerate(formats):
                 try:
                     dt = datetime.strptime(datetime_str_en, fmt)
-                    return dt.replace(tzinfo=BANGKOK_TZ)
-                except ValueError:
+                    result_dt = dt.replace(tzinfo=BANGKOK_TZ)
+                    logger.info(f"[PARSER] SUCCESS with format {i+1} ({fmt}): {result_dt}")
+                    return result_dt
+                except ValueError as e:
+                    logger.debug(f"[PARSER] Format {i+1} ({fmt}) failed: {e}")
                     continue
                     
             # ถ้าไม่ได้ ลองใช้ parser เดิม
+            logger.warning(f"[PARSER] All formats failed, trying fallback parser")
             parsed_dt, _ = self.parse_datetime(datetime_str)
+            logger.info(f"[PARSER] Fallback result: {parsed_dt}")
             return parsed_dt
             
         except Exception as e:
