@@ -11,32 +11,13 @@ REM เปิดใช้งาน virtual environment
 echo เปิดใช้งาน virtual environment...
 call venv\Scripts\activate.bat
 
-REM ตรวจสอบว่า environment variables พร้อมหรือไม่
+REM ตั้งค่า environment variables ด้วย PowerShell
 echo.
-echo ตรวจสอบ environment variables...
-if "%LINE_CHANNEL_ACCESS_TOKEN%"=="" (
-    echo ❌ LINE_CHANNEL_ACCESS_TOKEN ไม่ได้ตั้งค่า
-    echo กรุณาตั้งค่า environment variables ก่อน
-    pause
-    exit /b 1
-)
+echo ตั้งค่า environment variables...
+powershell -ExecutionPolicy Bypass -File "setup_env.ps1"
 
-if "%GOOGLE_CREDENTIALS_JSON%"=="" (
-    echo ❌ GOOGLE_CREDENTIALS_JSON ไม่ได้ตั้งค่า
-    echo กรุณาตั้งค่า environment variables ก่อน
-    pause
-    exit /b 1
-)
-
-if "%GOOGLE_SPREADSHEET_ID%"=="" (
-    echo ❌ GOOGLE_SPREADSHEET_ID ไม่ได้ตั้งค่า
-    echo กรุณาตั้งค่า environment variables ก่อน
-    pause
-    exit /b 1
-)
-
-echo ✅ Environment variables พร้อมแล้ว
 echo.
+echo ========================================
 
 REM รันการทดสอบ
 echo เริ่มทดสอบระบบแจ้งเตือน...

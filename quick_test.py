@@ -8,12 +8,62 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# โหลด environment variables จากไฟล์ .env ถ้ามี
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ โหลด .env file สำเร็จ")
+except ImportError:
+    print("ℹ️  python-dotenv ไม่พบ จะใช้ environment variables ของระบบ")
+
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, PushMessageRequest, TextMessage
 from datetime import datetime
 import pytz
 
+def check_environment():
+    """ตรวจสอบ environment variables"""
+    required_vars = {
+        'LINE_CHANNEL_ACCESS_TOKEN': 'LINE Channel Access Token',
+        'GOOGLE_CREDENTIALS_JSON': 'Google Credentials JSON',
+        'GOOGLE_SPREADSHEET_ID': 'Google Spreadsheet ID'
+    }
+    
+    print("🔍 ตรวจสอบ Environment Variables...")
+    print("-" * 40)
+    
+    missing_vars = []
+    for var, description in required_vars.items():
+        value = os.getenv(var)
+        if value:
+            # แสดงเฉพาะส่วนเริ่มต้นเพื่อความปลอดภัย
+            display_value = value[:20] + "..." if len(value) > 20 else value
+            print(f"✅ {var}: {display_value}")
+        else:
+            print(f"❌ {var}: ไม่พบ")
+            missing_vars.append(var)
+    
+    print("-" * 40)
+    
+    if missing_vars:
+        print(f"❌ ขาด environment variables: {', '.join(missing_vars)}")
+        print("\n💡 วิธีแก้ไข:")
+        print("1. ตรวจสอบไฟล์ .env ในโฟลเดอร์โปรเจค")
+        print("2. หรือตั้งค่าใน PowerShell:")
+        for var in missing_vars:
+            print(f"   $env:{var}=\"your_value_here\"")
+        return False
+    
+    return True
+
 def quick_test():
     """ทดสอบเร็ว ๆ ส่งข้อความไปทั้ง Personal และ Group"""
+    
+    print("🧪 เริ่มต้นการทดสอบระบบแจ้งเตือน")
+    print("=" * 50)
+    
+    # ตรวจสอบ environment variables ก่อน
+    if not check_environment():
+        return False
     
     # ตั้งค่า LINE Bot
     channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
