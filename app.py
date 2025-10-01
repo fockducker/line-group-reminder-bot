@@ -67,12 +67,24 @@ except Exception as e:
 
 
 @app.route('/healthz', methods=['GET'])
+@app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint สำหรับตรวจสอบสถานะของ application"""
-    return jsonify({
-        'status': 'ok',
-        'message': 'LINE Bot is running'
-    }), 200
+    """Health check endpoint เพื่อป้องกัน Render service หลับ"""
+    try:
+        return jsonify({
+            'status': 'ok',
+            'message': 'LINE Bot is running normally',
+            'timestamp': datetime.now().isoformat(),
+            'uptime': 'Service is awake',
+            'notification_scheduler': 'Active' if notification_service and notification_service.scheduler.running else 'Inactive',
+            'version': '1.0.0'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
 
 
 @app.route('/run-scheduler', methods=['GET'])
@@ -86,26 +98,6 @@ def run_scheduler_endpoint():
             'message': 'scheduler ok',
             'timestamp': now.isoformat()
         }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
-
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint เพื่อป้องกัน Render service หลับ"""
-    try:
-        return jsonify({
-            'status': 'ok',
-            'message': 'LINE Bot is running normally',
-            'timestamp': datetime.now().isoformat(),
-            'uptime': 'Service is awake',
-            'notification_scheduler': 'Active' if notification_service and notification_service.scheduler.running else 'Inactive',
-            'version': '1.0.0'
-        })
     except Exception as e:
         return jsonify({
             'status': 'error',
