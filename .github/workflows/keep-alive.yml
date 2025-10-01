@@ -1,0 +1,37 @@
+name: Keep Render Service Alive
+# GitHub Actions workflow เพื่อป้องกัน Render Free Tier หลับ
+
+on:
+  schedule:
+    # รันทุก 10 นาที (*/10 * * * *)
+    # หรือทุก 14 นาที (*/14 * * * *) เพื่อความปลอดภัย
+    - cron: '*/14 * * * *'
+  
+  # อนุญาตให้รัน manual ได้ด้วย
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    name: Ping Render Service
+    
+    steps:
+    - name: Ping LINE Bot Service
+      run: |
+        echo "🏃 Pinging LINE Bot to keep it awake..."
+        
+        # Ping หลาย endpoint เพื่อความแน่ใจ
+        curl -f https://line-group-reminder-bot.onrender.com/health || echo "Health endpoint failed"
+        sleep 5
+        curl -f https://line-group-reminder-bot.onrender.com/ || echo "Root endpoint failed"
+        
+        echo "✅ Keep-alive ping completed"
+        echo "⏰ Next ping in 14 minutes"
+    
+    - name: Log Status
+      run: |
+        echo "📊 Keep-Alive Status Report:"
+        echo "🕐 Time: $(date)"
+        echo "🌐 Service: line-group-reminder-bot.onrender.com" 
+        echo "📡 Ping Status: Success"
+        echo "🔄 Next execution: $(date -d '+14 minutes')"
