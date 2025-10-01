@@ -420,8 +420,7 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
 def handle_delete_appointment_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
     """จัดการคำสั่งลบการนัดหมาย"""
     try:
-        from linebot.v3.messaging import MessagingApi, PushMessageRequest, TextMessage
-        from linebot.v3 import Configuration, ApiClient
+        from linebot.v3.messaging import MessagingApi, PushMessageRequest, TextMessage, Configuration, ApiClient
         import os
         import re
         
