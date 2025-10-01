@@ -420,9 +420,12 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
 def handle_delete_appointment_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
     """จัดการคำสั่งลบการนัดหมาย"""
     try:
-        # แยกรหัสนัดหมายจากข้อความ
+        from linebot.v3.messaging import MessagingApi, PushMessageRequest, TextMessage
+        from linebot.v3 import Configuration, ApiClient
+        import os
         import re
         
+        # แยกรหัสนัดหมายจากข้อความ
         # Pattern: ลบนัด [appointment_id]
         pattern = r'(?:ลบนัด|ยกเลิกนัด|ลบการนัด)\s+([A-Za-z0-9]+)'
         match = re.search(pattern, user_message, re.IGNORECASE)
@@ -440,6 +443,29 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 💡 ดูรหัสนัดหมายได้จากคำสั่ง "ดูนัด" """
 
         appointment_id = match.group(1).strip()
+        
+        # ส่งข้อความยืนยันทันที
+        try:
+            channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+            if channel_access_token:
+                configuration = Configuration(access_token=channel_access_token)
+                api_client = ApiClient(configuration)
+                line_bot_api = MessagingApi(api_client)
+                
+                # กำหนด user/group ที่จะส่งข้อความ
+                target_id = context_id if context_type == "group" else user_id
+                
+                # ส่งข้อความยืนยัน
+                confirmation_message = f"⏳ กำลังลบนัดหมาย {appointment_id}...\nรอสักครู่นะคะ"
+                line_bot_api.push_message(
+                    PushMessageRequest(
+                        to=target_id,
+                        messages=[TextMessage(text=confirmation_message)]
+                    )
+                )
+                logger.info(f"Sent deletion confirmation for appointment {appointment_id}")
+        except Exception as e:
+            logger.error(f"Failed to send confirmation message: {e}")
         
         # เชื่อมต่อกับ database
         repo = SheetsRepository()
@@ -468,15 +494,15 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
                 break
         
         if not target_appointment:
-            return f"""❌ ไม่พบนัดหมายรหัส: {appointment_id}
+            final_message = f"""❌ ไม่พบนัดหมายรหัส: {appointment_id}
 
 💡 ตรวจสอบรหัสนัดหมายด้วยคำสั่ง "ดูนัด" """
-
-        # ลบนัดหมาย
-        success = repo.delete_appointment(appointment_id, sheets_context)
-        
-        if success:
-            return f"""✅ ลบนัดหมายเรียบร้อย!
+        else:
+            # ลบนัดหมาย
+            success = repo.delete_appointment(appointment_id, sheets_context)
+            
+            if success:
+                final_message = f"""✅ ลบนัดหมายเรียบร้อย!
 
 🗑️ นัดหมายที่ถูกลบ:
 • รหัส: {appointment_id}
@@ -484,8 +510,25 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 • วันที่: {target_appointment.date}
 • เวลา: {target_appointment.time}
 • หมอ: {target_appointment.doctor}"""
-        else:
-            return f"❌ ไม่สามารถลบนัดหมายรหัส {appointment_id} ได้ กรุณาลองใหม่อีกครั้ง"
+            else:
+                final_message = f"❌ ไม่สามารถลบนัดหมายรหัส {appointment_id} ได้ กรุณาลองใหม่อีกครั้ง"
+        
+        # ส่งผลลัพธ์ผ่าน push message
+        try:
+            if 'line_bot_api' in locals():
+                line_bot_api.push_message(
+                    PushMessageRequest(
+                        to=target_id,
+                        messages=[TextMessage(text=final_message)]
+                    )
+                )
+                logger.info(f"Sent final deletion result for appointment {appointment_id}")
+                return "🔄 กำลังดำเนินการลบนัดหมาย..."  # ข้อความชั่วคราวเพื่อไม่ให้ timeout
+            else:
+                return final_message
+        except Exception as e:
+            logger.error(f"Failed to send final message: {e}")
+            return final_message
         
     except Exception as e:
         logger.error(f"Error in handle_delete_appointment_command: {e}")
