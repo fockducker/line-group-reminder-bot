@@ -39,11 +39,8 @@ if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
 # สร้าง Configuration และ MessagingApi สำหรับ v3
 notification_service = None
 try:
-    configuration = Configuration(
-        access_token=CHANNEL_ACCESS_TOKEN,
-        read_timeout=30,    # เพิ่ม read timeout
-        connect_timeout=10  # เพิ่ม connect timeout
-    )
+    # Configuration ใน LINE Bot SDK v3 ไม่รองรับ timeout parameters
+    configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
     api_client = ApiClient(configuration)
     line_bot_api = MessagingApi(api_client)
     handler = WebhookHandler(CHANNEL_SECRET)
@@ -51,7 +48,7 @@ try:
     # ลงทะเบียน event handlers เฉพาะเมื่อมี tokens จริง
     if CHANNEL_ACCESS_TOKEN != "dummy" and CHANNEL_SECRET != "dummy":
         register_handlers(handler, line_bot_api)
-        print("LINE Bot handlers registered successfully")
+        print("✅ LINE Bot handlers registered successfully")
         
         # เริ่มต้น Notification Service
         if NOTIFICATION_ENABLED:
@@ -63,9 +60,12 @@ try:
                 print(f"❌ Failed to start notification service: {e}")
                 notification_service = None
     else:
-        print("Skipping LINE Bot handler registration due to missing credentials")
+        print("⚠️ LINE Bot running in dummy mode - handlers not registered")
+        
 except Exception as e:
-    print(f"Error initializing LINE Bot: {e}")
+    print(f"❌ Error initializing LINE Bot: {e}")
+    print("⚠️ LINE Bot will run in safe mode without handlers")
+    # กำหนดค่า default เพื่อให้ app ยังรันได้
     handler = None
     line_bot_api = None
 
