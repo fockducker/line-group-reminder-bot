@@ -87,6 +87,18 @@ def health_check():
         }), 500
 
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    """Ultra-lightweight ping endpoint for UptimeRobot"""
+    return "pong", 200
+
+
+@app.route('/alive', methods=['GET'])
+def alive():
+    """Minimal alive check - fastest response"""
+    return "1", 200
+
+
 @app.route('/run-scheduler', methods=['GET'])
 def run_scheduler_endpoint():
     """Scheduler endpoint สำหรับเรียกใช้งานจาก cron job"""

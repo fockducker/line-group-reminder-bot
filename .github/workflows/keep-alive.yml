@@ -22,27 +22,36 @@ jobs:
         HEALTH_STATUS=0
         ROOT_STATUS=0
         
-        echo "📡 Pinging health endpoint..."
-        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/health; then
-          echo "✅ Health endpoint: OK"
+        echo "📡 Pinging ultra-fast ping endpoint..."
+        if curl -f -s --max-time 15 https://line-group-reminder-bot.onrender.com/ping; then
+          echo "✅ Ping endpoint: OK"
           HEALTH_STATUS=1
         else
-          echo "❌ Health endpoint: Failed"
+          echo "❌ Ping endpoint: Failed"
         fi
         
-        sleep 3
+        sleep 2
+        
+        echo "📡 Pinging alive endpoint..."
+        if curl -f -s --max-time 15 https://line-group-reminder-bot.onrender.com/alive; then
+          echo "✅ Alive endpoint: OK"
+        else
+          echo "❌ Alive endpoint: Failed"
+        fi
+        
+        sleep 2
         
         echo "📡 Pinging healthz endpoint..."
-        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/healthz; then
+        if curl -f -s --max-time 15 https://line-group-reminder-bot.onrender.com/healthz; then
           echo "✅ Healthz endpoint: OK"
         else
           echo "❌ Healthz endpoint: Failed"
         fi
         
-        sleep 3
+        sleep 2
         
         echo "📡 Pinging root endpoint..."
-        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/; then
+        if curl -f -s --max-time 15 https://line-group-reminder-bot.onrender.com/; then
           echo "✅ Root endpoint: OK"
           ROOT_STATUS=1
         else
