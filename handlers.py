@@ -5,11 +5,13 @@ Event handlers module for LINE Group Reminder Bot
 
 import logging
 import uuid
+import time
 from datetime import datetime, timedelta
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from storage.models import Appointment
+from utils.message_sender import create_connection_aware_sender, MessageQueue
 
 # Conditional import สำหรับ SheetsRepository
 try:
@@ -172,46 +174,55 @@ def register_handlers(handler, line_bot_api):
         else:
             reply_message = f'คุณพิมพ์: "{user_message}"\\n\\nพิมพ์ "help" เพื่อดูคำสั่งที่ใช้ได้\\nContext: {context_type.title()}'
         
-        # ส่งข้อความตอบกลับ
-        try:
-            import time
-            reply_start = time.time()
-            
-            # ตัดข้อความถ้ายาวเกิน 2000 ตัวอักษร (ป้องกัน timeout)
-            if len(reply_message) > 2000:
-                reply_message = reply_message[:1950] + "\n\n... (ข้อความยาวเกินไป กรุณาใช้คำสั่ง 'list' เพื่อดูข้อมูลทีละส่วน)"
-                logger.warning(f"Message truncated due to length: {len(reply_message)} chars")
-            
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_message)]
-                )
-            )
-            
-            reply_end = time.time()
-            logger.info(f"Reply sent successfully in {reply_end - reply_start:.2f}s: {reply_message[:50]}...")
-            
-        except Exception as e:
-            logger.error(f"Failed to send reply: {e}")
-            
-            # Retry กับข้อความสั้น ๆ ถ้า error
-            try:
-                logger.info("Attempting to send error fallback message...")
-                fallback_message = "❌ เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง"
-                
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=fallback_message)]
-                    )
-                )
-                logger.info("Fallback message sent successfully")
-            except Exception as retry_error:
-                logger.error(f"Fallback message also failed: {retry_error}")
-                # ไม่ทำอะไรเพิ่ม เพื่อไม่ให้ระบบหยุดทำงาน
+        # ส่งข้อความตอบกลับด้วย robust sender
+        sender = create_connection_aware_sender(line_bot_api)
+        success, error = sender.send_reply_with_timeout(event.reply_token, reply_message)
+        
+        if not success:
+            logger.error(f"Failed to send reply after retries: {error}")
+            # Send fallback message
+            sender.send_fallback_message(event.reply_token)
     
     logger.info("LINE event handlers registered successfully")
+
+
+def get_help_text(context_type: str = "personal") -> str:
+    """Get help text for testing and warmup purposes"""
+    base_help = '''📋 คำสั่งการจัดการนัดหมาย:
+
+• "เพิ่มนัด" - เพิ่มการนัดหมายใหม่
+• "ดูนัด" - ดูรายการนัดหมาย
+• "ลบนัด [รหัส]" - ลบการนัดหมาย
+• "แก้ไขนัด [รหัส]" - แก้ไขการนัดหมาย
+• "สถานะ" - ดูสถานะของบอท
+• "เตือน" - ดูข้อมูลการแจ้งเตือน
+
+📝 รูปแบบการเพิ่มนัด:
+แบบที่ 1 (Structured):
+ชื่อนัดหมาย: "ปรึกษาตรวจฟัน"
+วันเวลา: "8 ตุลาคม 2025 14:00"
+แพทย์: "ทพญ. ปารัช"
+โรงพยาบาล: "ศิริราช"
+แผนก: "ทันตกรรม"
+
+แบบที่ 2 (Natural):
+เพิ่มนัด วันที่ 8 ตุลาคม 2025 เวลา 14:00 โรงพยาบาล ศิริราช แผนก ทันตกรรม ปรึกษาตรวจฟัน พบ ทพญ. ปารัช
+
+🗑️ การลบนัดหมาย:
+ลบนัด ABC123
+
+🔄 การแก้ไขนัดหมาย:
+แก้ไขนัด ABC123 ชื่อนัดหมาย:"ตรวจร่างกาย"
+
+แก้ไขนัด ABC123
+ชื่อนัดหมาย:"ตรวจร่างกาย"
+วันเวลา:"10 ตุลาคม 2025 15:00"
+แพทย์:"ดร.สมชาย"'''
+    
+    if context_type == "group":
+        return base_help + '\n\n🏥 โหมดกลุ่ม: การนัดหมายจะแสดงให้ทุกคนในกลุ่มเห็น'
+    else:
+        return base_help + '\n\n👤 โหมดส่วนตัว: การนัดหมายของคุณเท่านั้น'
 
 
 def handle_add_appointment_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
@@ -456,14 +467,13 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
 
 
 def handle_delete_appointment_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
-    """จัดการคำสั่งลบการนัดหมาย"""
+    """จัดการคำสั่งลบการนัดหมาย - ใช้ robust message sending"""
     try:
         from linebot.v3.messaging import MessagingApi, PushMessageRequest, TextMessage, Configuration, ApiClient
         import os
         import re
         
         # แยกรหัสนัดหมายจากข้อความ
-        # Pattern: ลบนัด [appointment_id]
         pattern = r'(?:ลบนัด|ยกเลิกนัด|ลบการนัด)\s+([A-Za-z0-9]+)'
         match = re.search(pattern, user_message, re.IGNORECASE)
         
@@ -481,7 +491,7 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 
         appointment_id = match.group(1).strip()
         
-        # ส่งข้อความยืนยันทันที
+        # เริ่ม background deletion process ด้วย robust messaging
         try:
             channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
             if channel_access_token:
@@ -489,11 +499,15 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
                 api_client = ApiClient(configuration)
                 line_bot_api = MessagingApi(api_client)
                 
-                # กำหนด user/group ที่จะส่งข้อความ
+                # สร้าง robust sender
+                sender = create_connection_aware_sender(line_bot_api)
+                
                 target_id = context_id if context_type == "group" else user_id
                 
-                # ส่งข้อความยืนยัน
+                # ข้อความยืนยัน
                 confirmation_message = f"⏳ กำลังลบนัดหมาย {appointment_id}...\nรอสักครู่นะคะ"
+                
+                # ส่งข้อความยืนยันทันที
                 line_bot_api.push_message(
                     PushMessageRequest(
                         to=target_id,
@@ -501,45 +515,45 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
                     )
                 )
                 logger.info(f"Sent deletion confirmation for appointment {appointment_id}")
-        except Exception as e:
-            logger.error(f"Failed to send confirmation message: {e}")
-        
-        # เชื่อมต่อกับ database
-        repo = SheetsRepository()
-        
-        # กำหนด context และ group_id สำหรับ Google Sheets
-        if context_type == "group":
-            sheets_context = f"group_{context_id}"
-            group_id_for_query = context_id
-        else:
-            sheets_context = "personal"
-            group_id_for_query = user_id
-        
-        # ดึงรายการนัดหมาย
-        appointments = repo.get_appointments(group_id_for_query, sheets_context)
-        
-        # Debug logging
-        logger.info(f"Delete attempt - Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
-        for apt in appointments:
-            logger.info(f"Available appointment ID: {apt.id}")
-        
-        # หานัดหมายที่ต้องการลบ
-        target_appointment = None
-        for apt in appointments:
-            if apt.id == appointment_id:
-                target_appointment = apt
-                break
-        
-        if not target_appointment:
-            final_message = f"""❌ ไม่พบนัดหมายรหัส: {appointment_id}
+                
+                # ดำเนินการลบและส่งผลลัพธ์
+                def process_deletion():
+                    try:
+                        # เชื่อมต่อกับ database
+                        repo = SheetsRepository()
+                        
+                        # กำหนด context
+                        if context_type == "group":
+                            sheets_context = f"group_{context_id}"
+                            group_id_for_query = context_id
+                        else:
+                            sheets_context = "personal"
+                            group_id_for_query = user_id
+                        
+                        # ดึงรายการนัดหมาย
+                        appointments = repo.get_appointments(group_id_for_query, sheets_context)
+                        
+                        logger.info(f"Delete attempt - Found {len(appointments)} appointments for group_id: {group_id_for_query}, context: {sheets_context}")
+                        for apt in appointments:
+                            logger.info(f"Available appointment ID: {apt.id}")
+                        
+                        # หานัดหมายที่ต้องการลบ
+                        target_appointment = None
+                        for apt in appointments:
+                            if apt.id == appointment_id:
+                                target_appointment = apt
+                                break
+                        
+                        if not target_appointment:
+                            final_message = f"""❌ ไม่พบนัดหมายรหัส: {appointment_id}
 
 💡 ตรวจสอบรหัสนัดหมายด้วยคำสั่ง "ดูนัด" """
-        else:
-            # ลบนัดหมาย
-            success = repo.delete_appointment(appointment_id, sheets_context)
-            
-            if success:
-                final_message = f"""✅ ลบนัดหมายเรียบร้อย!
+                        else:
+                            # ลบนัดหมาย
+                            success = repo.delete_appointment(appointment_id, sheets_context)
+                            
+                            if success:
+                                final_message = f"""✅ ลบนัดหมายเรียบร้อย!
 
 🗑️ นัดหมายที่ถูกลบ:
 • รหัส: {appointment_id}
@@ -547,25 +561,43 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 • วันที่: {target_appointment.date}
 • เวลา: {target_appointment.time}
 • หมอ: {target_appointment.doctor}"""
-            else:
-                final_message = f"❌ ไม่สามารถลบนัดหมายรหัส {appointment_id} ได้ กรุณาลองใหม่อีกครั้ง"
-        
-        # ส่งผลลัพธ์ผ่าน push message
-        try:
-            if 'line_bot_api' in locals():
-                line_bot_api.push_message(
-                    PushMessageRequest(
-                        to=target_id,
-                        messages=[TextMessage(text=final_message)]
-                    )
-                )
-                logger.info(f"Sent final deletion result for appointment {appointment_id}")
-                return "🔄 กำลังดำเนินการลบนัดหมาย..."  # ข้อความชั่วคราวเพื่อไม่ให้ timeout
-            else:
-                return final_message
+                            else:
+                                final_message = f"❌ ไม่สามารถลบนัดหมายรหัส {appointment_id} ได้ กรุณาลองใหม่อีกครั้ง"
+                        
+                        # ส่งผลลัพธ์ด้วย robust sender
+                        line_bot_api.push_message(
+                            PushMessageRequest(
+                                to=target_id,
+                                messages=[TextMessage(text=final_message)]
+                            )
+                        )
+                        logger.info(f"Sent final deletion result for appointment {appointment_id}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error in deletion process: {e}")
+                        # ส่งข้อความ error
+                        error_message = f"❌ เกิดข้อผิดพลาดในการลบนัดหมาย {appointment_id}"
+                        try:
+                            line_bot_api.push_message(
+                                PushMessageRequest(
+                                    to=target_id,
+                                    messages=[TextMessage(text=error_message)]
+                                )
+                            )
+                        except:
+                            pass
+                
+                # Run deletion in background thread
+                import threading
+                thread = threading.Thread(target=process_deletion)
+                thread.daemon = True
+                thread.start()
+                
+                return "🔄 กำลังดำเนินการลบนัดหมาย..."
+                
         except Exception as e:
-            logger.error(f"Failed to send final message: {e}")
-            return final_message
+            logger.error(f"Failed to setup deletion process: {e}")
+            return f"❌ ไม่สามารถเริ่มกระบวนการลบนัดหมาย {appointment_id} ได้"
         
     except Exception as e:
         logger.error(f"Error in handle_delete_appointment_command: {e}")

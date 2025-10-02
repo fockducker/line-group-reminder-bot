@@ -103,6 +103,105 @@ def alive():
     return "1", 200
 
 
+@app.route('/warmup', methods=['GET'])
+def warmup():
+    """
+    Comprehensive warmup endpoint for application and dependencies
+    This endpoint simulates full application usage to keep connections warm
+    """
+    try:
+        import time
+        start_time = time.time()
+        
+        warmup_results = {
+            'status': 'warming_up',
+            'timestamp': datetime.now().isoformat(),
+            'checks': {}
+        }
+        
+        # 1. Basic application check
+        warmup_results['checks']['app'] = 'ok'
+        
+        # 2. LINE Bot API connection test
+        try:
+            if line_bot_api:
+                # We can't easily test LINE API without a real webhook, so just check config
+                warmup_results['checks']['line_api'] = 'configured'
+            else:
+                warmup_results['checks']['line_api'] = 'not_configured'
+        except Exception as e:
+            warmup_results['checks']['line_api'] = f'error: {str(e)[:50]}'
+        
+        # 3. Google Sheets connection warmup
+        try:
+            from storage.sheets_repo import SheetsRepository
+            repo = SheetsRepository()
+            # Test connection without making changes
+            if repo and hasattr(repo, 'sheet'):
+                warmup_results['checks']['google_sheets'] = 'connected'
+            else:
+                warmup_results['checks']['google_sheets'] = 'not_connected'
+        except Exception as e:
+            warmup_results['checks']['google_sheets'] = f'error: {str(e)[:50]}'
+        
+        # 4. Notification service check
+        try:
+            if notification_service and hasattr(notification_service, 'scheduler'):
+                if notification_service.scheduler.running:
+                    warmup_results['checks']['scheduler'] = 'running'
+                else:
+                    warmup_results['checks']['scheduler'] = 'stopped'
+            else:
+                warmup_results['checks']['scheduler'] = 'not_available'
+        except Exception as e:
+            warmup_results['checks']['scheduler'] = f'error: {str(e)[:50]}'
+        
+        # 5. Message sender warmup
+        try:
+            from utils.message_sender import create_connection_aware_sender
+            if line_bot_api:
+                sender = create_connection_aware_sender(line_bot_api)
+                warmup_results['checks']['message_sender'] = 'ready'
+            else:
+                warmup_results['checks']['message_sender'] = 'line_api_required'
+        except Exception as e:
+            warmup_results['checks']['message_sender'] = f'error: {str(e)[:50]}'
+        
+        # 6. Import handlers warmup
+        try:
+            from handlers import get_help_text
+            test_help = get_help_text("personal")
+            if test_help and len(test_help) > 0:
+                warmup_results['checks']['handlers'] = 'loaded'
+            else:
+                warmup_results['checks']['handlers'] = 'empty_response'
+        except Exception as e:
+            warmup_results['checks']['handlers'] = f'error: {str(e)[:50]}'
+        
+        elapsed_time = time.time() - start_time
+        warmup_results['warmup_time_seconds'] = round(elapsed_time, 3)
+        warmup_results['status'] = 'warmed_up'
+        
+        # Determine overall health
+        error_count = sum(1 for check in warmup_results['checks'].values() if 'error' in str(check))
+        if error_count == 0:
+            warmup_results['overall_health'] = 'healthy'
+            return jsonify(warmup_results), 200
+        elif error_count <= 2:
+            warmup_results['overall_health'] = 'degraded'
+            return jsonify(warmup_results), 200
+        else:
+            warmup_results['overall_health'] = 'unhealthy'
+            return jsonify(warmup_results), 503
+            
+    except Exception as e:
+        return jsonify({
+            'status': 'warmup_failed',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
 @app.route('/run-scheduler', methods=['GET'])
 def run_scheduler_endpoint():
     """Scheduler endpoint สำหรับเรียกใช้งานจาก cron job"""

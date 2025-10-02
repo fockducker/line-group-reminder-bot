@@ -1,0 +1,32 @@
+name: Aggressive Keep-Alive
+
+on:
+  schedule:
+    # รันทุก 10 นาที (ถี่กว่าเดิม)
+    - cron: '*/10 * * * *'
+  
+  workflow_dispatch:
+
+jobs:
+  aggressive-keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Aggressive Ping
+      run: |
+        echo "🚀 Aggressive keep-alive starting..."
+        echo "🕐 Time: $(date)"
+        
+        # Ping multiple times with different intervals
+        for i in {1..3}; do
+          echo "📡 Ping attempt $i/3"
+          curl -f -s -m 30 https://line-group-reminder-bot.onrender.com/health \
+            && echo "✅ Ping $i successful" \
+            || echo "❌ Ping $i failed"
+          
+          if [ $i -lt 3 ]; then
+            sleep 10
+          fi
+        done
+        
+        echo "🎯 Aggressive keep-alive completed"
