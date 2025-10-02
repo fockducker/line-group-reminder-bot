@@ -177,6 +177,11 @@ def register_handlers(handler, line_bot_api):
             import time
             reply_start = time.time()
             
+            # ตัดข้อความถ้ายาวเกิน 2000 ตัวอักษร (ป้องกัน timeout)
+            if len(reply_message) > 2000:
+                reply_message = reply_message[:1950] + "\n\n... (ข้อความยาวเกินไป กรุณาใช้คำสั่ง 'list' เพื่อดูข้อมูลทีละส่วน)"
+                logger.warning(f"Message truncated due to length: {len(reply_message)} chars")
+            
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
@@ -186,8 +191,25 @@ def register_handlers(handler, line_bot_api):
             
             reply_end = time.time()
             logger.info(f"Reply sent successfully in {reply_end - reply_start:.2f}s: {reply_message[:50]}...")
+            
         except Exception as e:
             logger.error(f"Failed to send reply: {e}")
+            
+            # Retry กับข้อความสั้น ๆ ถ้า error
+            try:
+                logger.info("Attempting to send error fallback message...")
+                fallback_message = "❌ เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง"
+                
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=fallback_message)]
+                    )
+                )
+                logger.info("Fallback message sent successfully")
+            except Exception as retry_error:
+                logger.error(f"Fallback message also failed: {retry_error}")
+                # ไม่ทำอะไรเพิ่ม เพื่อไม่ให้ระบบหยุดทำงาน
     
     logger.info("LINE event handlers registered successfully")
 
@@ -385,8 +407,15 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
         # รวมกัน: อนาคตก่อน แล้วตามด้วยอดีต
         appointments = future_appointments + past_appointments
         
+        # จำกัดการแสดงผลเพื่อป้องกันข้อความยาวเกินไป
+        MAX_APPOINTMENTS = 10  # แสดงแค่ 10 รายการแรก
+        total_appointments = len(appointments)
+        
+        if total_appointments > MAX_APPOINTMENTS:
+            appointments = appointments[:MAX_APPOINTMENTS]
+            
         # สร้างรายการนัดหมาย
-        appointment_list = "📋 รายการนัดหมายของคุณ\n\n"
+        appointment_list = f"📋 รายการนัดหมายของคุณ ({total_appointments} รายการ)\n\n"
         
         for i, appointment in enumerate(appointments, 1):
             date_str = appointment.appointment_datetime.strftime("%d/%m/%Y %H:%M")
@@ -398,19 +427,28 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
                 status_icon = "⚪"  # นัดหมายที่ผ่านมาแล้ว
             
             appointment_list += f"📅 {i}. {status_icon} {appointment.note}\n"
-            appointment_list += f"     🕐 วันที่: {date_str}\n"
+            appointment_list += f"     🕐 {date_str}\n"
             if appointment.hospital and appointment.hospital != "LINE Bot":
-                appointment_list += f"     🏥 โรงพยาบาล: {appointment.hospital}\n"
+                appointment_list += f"     🏥 {appointment.hospital}\n"
             if appointment.department and appointment.department != "General":
-                appointment_list += f"     🏢 แผนก: {appointment.department}\n"
+                appointment_list += f"     🏢 {appointment.department}\n"
             if getattr(appointment, 'doctor', None) and appointment.doctor:
-                appointment_list += f"     👨‍⚕️ แพทย์: {appointment.doctor}\n"
-            appointment_list += f"     🆔 รหัส: {appointment.id}\n\n"
+                appointment_list += f"     👨‍⚕️ {appointment.doctor}\n"
+            appointment_list += f"     🆔 {appointment.id}\n\n"
         
-        return appointment_list + """💡 พิมพ์ 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย
+        # เพิ่มข้อความถ้ามีการนัดหมายมากกว่าที่แสดง
+        footer = """💡 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย
 
-🔴 = นัดหมายที่กำลังจะมาถึง
-⚪ = นัดหมายที่ผ่านมาแล้ว"""
+🔴 = นัดหมายใกล้ถึง
+⚪ = นัดหมายที่ผ่านแล้ว"""
+        
+        if total_appointments > MAX_APPOINTMENTS:
+            footer = f"""⚠️ แสดง {MAX_APPOINTMENTS} จาก {total_appointments} รายการ
+สำหรับรายการทั้งหมดใช้เว็บหรือ Google Sheets
+
+""" + footer
+        
+        return appointment_list + footer
         
     except Exception as e:
         logger.error(f"Error in handle_list_appointments_command: {e}")

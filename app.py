@@ -39,7 +39,11 @@ if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
 # สร้าง Configuration และ MessagingApi สำหรับ v3
 notification_service = None
 try:
-    configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
+    configuration = Configuration(
+        access_token=CHANNEL_ACCESS_TOKEN,
+        read_timeout=30,    # เพิ่ม read timeout
+        connect_timeout=10  # เพิ่ม connect timeout
+    )
     api_client = ApiClient(configuration)
     line_bot_api = MessagingApi(api_client)
     handler = WebhookHandler(CHANNEL_SECRET)
