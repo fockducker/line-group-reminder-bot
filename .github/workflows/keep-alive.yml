@@ -1,11 +1,9 @@
 name: Keep Render Service Alive
-# GitHub Actions workflow เพื่อป้องกัน Render Free Tier หลับ
 
 on:
   schedule:
-    # รันทุก 10 นาที (*/10 * * * *)
-    # หรือทุก 14 นาที (*/14 * * * *) เพื่อความปลอดภัย
-    - cron: '*/14 * * * *'
+    # รันทุก 10 นาทีเพื่อป้องกัน Render Free Tier หลับ (backup สำหรับ UptimeRobot)
+    - cron: '*/10 * * * *'
   
   # อนุญาตให้รัน manual ได้ด้วย
   workflow_dispatch:
@@ -13,20 +11,52 @@ on:
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    name: Ping Render Service
     
     steps:
     - name: Ping LINE Bot Service
       run: |
         echo "🏃 Pinging LINE Bot to keep it awake..."
+        echo "🕐 Current time: $(date)"
         
-        # Ping หลาย endpoint เพื่อความแน่ใจ
-        curl -f https://line-group-reminder-bot.onrender.com/health || echo "Health endpoint failed"
-        sleep 5
-        curl -f https://line-group-reminder-bot.onrender.com/ || echo "Root endpoint failed"
+        # Multiple endpoint pings with better error handling
+        HEALTH_STATUS=0
+        ROOT_STATUS=0
+        
+        echo "📡 Pinging health endpoint..."
+        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/health; then
+          echo "✅ Health endpoint: OK"
+          HEALTH_STATUS=1
+        else
+          echo "❌ Health endpoint: Failed"
+        fi
+        
+        sleep 3
+        
+        echo "📡 Pinging healthz endpoint..."
+        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/healthz; then
+          echo "✅ Healthz endpoint: OK"
+        else
+          echo "❌ Healthz endpoint: Failed"
+        fi
+        
+        sleep 3
+        
+        echo "📡 Pinging root endpoint..."
+        if curl -f -s --max-time 30 https://line-group-reminder-bot.onrender.com/; then
+          echo "✅ Root endpoint: OK"
+          ROOT_STATUS=1
+        else
+          echo "❌ Root endpoint: Failed"
+        fi
+        
+        # ถ้าทั้ง health และ root ล้มเหลว ให้ workflow fail
+        if [ $HEALTH_STATUS -eq 0 ] && [ $ROOT_STATUS -eq 0 ]; then
+          echo "💀 All endpoints failed - service might be down!"
+          exit 1
+        fi
         
         echo "✅ Keep-alive ping completed"
-        echo "⏰ Next ping in 14 minutes"
+        echo "⏰ Next ping in 10 minutes"
     
     - name: Log Status
       run: |
@@ -34,4 +64,5 @@ jobs:
         echo "🕐 Time: $(date)"
         echo "🌐 Service: line-group-reminder-bot.onrender.com" 
         echo "📡 Ping Status: Success"
-        echo "🔄 Next execution: $(date -d '+14 minutes')"
+        echo "🔄 Next execution: $(date -d '+10 minutes')"
+        echo "🔔 Note: Primary keep-alive via UptimeRobot (5min), GitHub Actions as backup (10min)"
