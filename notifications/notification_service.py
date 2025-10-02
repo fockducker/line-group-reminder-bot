@@ -103,6 +103,37 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error in daily notification check: {e}", exc_info=True)
     
+    def _get_all_group_contexts(self):
+        """หา group contexts ทั้งหมดจาก Google Sheets worksheets"""
+        try:
+            # ดึงรายชื่อ worksheets ทั้งหมด
+            if not self.sheets_repo.gc:
+                return []
+                
+            spreadsheet = self.sheets_repo.spreadsheet
+            if not spreadsheet:
+                return []
+            
+            group_contexts = []
+            worksheets = spreadsheet.worksheets()
+            
+            for worksheet in worksheets:
+                worksheet_title = worksheet.title
+                # หา worksheets ที่ขึ้นต้นด้วย "group_"
+                if worksheet_title.startswith("group_"):
+                    group_id = worksheet_title.replace("group_", "")
+                    group_contexts.append({
+                        'group_id': group_id,
+                        'context': worksheet_title
+                    })
+                    logger.info(f"Found group context: {worksheet_title}")
+            
+            return group_contexts
+            
+        except Exception as e:
+            logger.error(f"Error getting group contexts: {e}")
+            return []
+
     def _get_all_appointments(self) -> List[Appointment]:
         """ดึงการนัดหมายทั้งหมดจาก Google Sheets"""
         try:
@@ -116,9 +147,24 @@ class NotificationService:
             except Exception as e:
                 logger.error(f"Error retrieving personal appointments: {e}")
             
-            # TODO: ดึงการนัดหมาย Group - ต้องมีวิธีการหา group_id ทั้งหมด
-            # ปัจจุบันไม่มีวิธีการ list ทุก group ที่มีการนัดหมาย
-            # อาจต้องเก็บ list ของ active groups หรือ scan worksheets
+            # ดึงการนัดหมาย Group - หาอัตโนมัติจาก worksheets
+            try:
+                group_contexts = self._get_all_group_contexts()
+                logger.info(f"Found {len(group_contexts)} group contexts")
+                
+                for group_info in group_contexts:
+                    try:
+                        group_appointments = self.sheets_repo.get_appointments(
+                            group_info['group_id'], 
+                            group_info['context']
+                        )
+                        all_appointments.extend(group_appointments)
+                        logger.info(f"Retrieved {len(group_appointments)} appointments from {group_info['context']}")
+                    except Exception as e:
+                        logger.error(f"Error retrieving appointments from {group_info['context']}: {e}")
+                        
+            except Exception as e:
+                logger.error(f"Error processing group appointments: {e}")
             
             logger.info(f"Retrieved total {len(all_appointments)} appointments for notification check")
             return all_appointments
