@@ -76,27 +76,42 @@ class NotificationService:
         ฟังก์ชันนี้จะถูกเรียกทุกวันเวลา 09:00
         แจ้งเตือนทุกนัดหมายที่มีอยู่ทุกวัน
         """
+        logger.info("="*50)
         logger.info("Starting daily notification check...")
+        logger.info(f"Current time: {datetime.now(BANGKOK_TZ)}")
         
         try:
+            # ตรวจสอบ Google Sheets connection
+            if not self.sheets_repo.gc or not self.sheets_repo.spreadsheet:
+                logger.error("Google Sheets not connected - cannot send notifications")
+                return
+            
+            logger.info("Google Sheets connected successfully")
+            
             # ดึงการนัดหมายทั้งหมดจาก Google Sheets
             all_appointments = self._get_all_appointments()
             
             if not all_appointments:
-                logger.info("No appointments found for notification")
+                logger.warning("No appointments found for notification")
+                logger.info("Checked both personal and group contexts")
                 return
             
+            logger.info(f"Found {len(all_appointments)} appointments to process")
             notifications_sent = 0
             now = datetime.now(BANGKOK_TZ)
             
             for appointment in all_appointments:
                 try:
+                    logger.info(f"Processing appointment {appointment.id}: {appointment.note}")
                     # ส่งการแจ้งเตือนทุกนัดหมายทุกวัน
                     self._send_daily_notification(appointment, now)
                     notifications_sent += 1
+                    logger.info(f"Notification sent successfully for {appointment.id}")
                     
                 except Exception as e:
                     logger.error(f"Error sending notification for appointment {appointment.id}: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
             
             logger.info(f"Daily notification check completed. Sent {notifications_sent} notifications")
             
@@ -252,6 +267,9 @@ class NotificationService:
                 message += f"\n\n⏰ เหลืออีก {days_diff} วัน อย่าลืมเตรียมตัว"
             
             # ส่งข้อความแจ้งเตือนไปยังผู้ใช้
+            logger.info(f"Sending notification to {appointment.group_id} for appointment {appointment.id}")
+            logger.info(f"Message preview: {message[:100]}...")
+            
             self.line_bot_api.push_message(
                 PushMessageRequest(
                     to=appointment.group_id,
@@ -259,10 +277,12 @@ class NotificationService:
                 )
             )
             
-            logger.info(f"Sent daily notification for appointment {appointment.id} to {appointment.group_id} (days_diff: {days_diff})")
+            logger.info(f"✅ Sent daily notification for appointment {appointment.id} to {appointment.group_id} (days_diff: {days_diff})")
             
         except Exception as e:
-            logger.error(f"Failed to send daily notification for appointment {appointment.id}: {e}")
+            logger.error(f"❌ Failed to send daily notification for appointment {appointment.id}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def _send_7_day_notification(self, appointment: Appointment):
         """ส่งการแจ้งเตือน 7 วันก่อน"""
@@ -381,3 +401,52 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to send test notification to user {user_id}: {e}")
             return False
+    
+    def debug_notification_system(self):
+        """Debug function สำหรับตรวจสอบระบบ notification"""
+        logger.info("="*60)
+        logger.info("🔍 NOTIFICATION SYSTEM DEBUG")
+        logger.info("="*60)
+        
+        # 1. ตรวจสอบ Google Sheets connection
+        logger.info("1. Google Sheets Connection:")
+        if self.sheets_repo.gc and self.sheets_repo.spreadsheet:
+            logger.info(f"   ✅ Connected to: {self.sheets_repo.spreadsheet.title}")
+            worksheets = self.sheets_repo.spreadsheet.worksheets()
+            logger.info(f"   ✅ Worksheets: {len(worksheets)}")
+            for ws in worksheets:
+                logger.info(f"      - {ws.title}")
+        else:
+            logger.error("   ❌ Google Sheets not connected")
+            return
+        
+        # 2. ตรวจสอบการนัดหมาย
+        logger.info("\n2. Appointments Check:")
+        all_appointments = self._get_all_appointments()
+        logger.info(f"   📊 Total appointments: {len(all_appointments)}")
+        
+        if all_appointments:
+            for apt in all_appointments:
+                days_diff = (apt.appointment_datetime.date() - datetime.now(BANGKOK_TZ).date()).days
+                logger.info(f"   📅 {apt.id}: {apt.note} (in {days_diff} days)")
+        else:
+            logger.warning("   ❌ No appointments found")
+            return
+        
+        # 3. ตรวจสอบ Scheduler
+        logger.info("\n3. Scheduler Status:")
+        logger.info(f"   ⏰ Running: {self.scheduler.running}")
+        logger.info(f"   🌍 Timezone: {self.scheduler.timezone}")
+        jobs = self.scheduler.get_jobs()
+        logger.info(f"   📋 Jobs: {len(jobs)}")
+        for job in jobs:
+            logger.info(f"      - {job.name} ({job.id})")
+        
+        logger.info("\n4. Test Summary:")
+        if all_appointments and self.sheets_repo.gc:
+            logger.info("   ✅ System ready for notifications")
+            logger.info("   💡 Next check: 09:00 Bangkok time daily")
+        else:
+            logger.warning("   ❌ System not ready - missing data or connection")
+        
+        logger.info("="*60)

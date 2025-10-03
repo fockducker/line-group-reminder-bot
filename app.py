@@ -294,6 +294,33 @@ def run_notification_check_endpoint():
         }), 500
 
 
+@app.route('/debug-notification', methods=['GET'])
+def debug_notification_endpoint():
+    """Debug notification system - ตรวจสอบสถานะระบบแจ้งเตือน"""
+    try:
+        if not notification_service:
+            return jsonify({
+                'status': 'error',
+                'message': 'Notification service not available'
+            }), 503
+        
+        # รัน debug function
+        notification_service.debug_notification_system()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Debug completed - check server logs for details',
+            'timestamp': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+
 @app.route('/callback', methods=['POST'])
 def callback():
     """Webhook endpoint สำหรับรับข้อความจาก LINE"""
