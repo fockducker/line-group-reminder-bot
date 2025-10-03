@@ -89,7 +89,7 @@ class SheetsRepository:
         รับ worksheet ตาม context
         
         Args:
-            context (str): บริบท ('personal' หรือ 'group_{group_id}')
+            context (str): บริบท ('personal' หรือ 'group_{group_id}' หรือ 'appointments_group_{group_id}')
             
         Returns:
             gspread.Worksheet หรือ None
@@ -98,7 +98,11 @@ class SheetsRepository:
             return None
             
         try:
-            worksheet_name = f"appointments_{context}"
+            # ตรวจสอบว่า context ขึ้นต้นด้วย "appointments_" หรือไม่
+            if context.startswith("appointments_"):
+                worksheet_name = context  # ใช้ชื่อที่ส่งมาเลย
+            else:
+                worksheet_name = f"appointments_{context}"  # เพิ่ม prefix สำหรับ context เก่า
             
             # หา worksheet หรือสร้างใหม่ถ้าไม่มี
             try:
