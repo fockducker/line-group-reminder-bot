@@ -134,15 +134,24 @@ class NotificationService:
             
             for worksheet in worksheets:
                 worksheet_title = worksheet.title
-                # หา worksheets ที่ขึ้นต้นด้วย "group_"
-                if worksheet_title.startswith("group_"):
-                    group_id = worksheet_title.replace("group_", "")
+                # หา worksheets ที่ขึ้นต้นด้วย "appointments_group_"
+                if worksheet_title.startswith("appointments_group_"):
+                    group_id = worksheet_title.replace("appointments_group_", "")
                     group_contexts.append({
                         'group_id': group_id,
                         'context': worksheet_title
                     })
                     logger.info(f"Found group context: {worksheet_title}")
+                # เพิ่มการรองรับ format เก่า "group_" (ถ้ามี)
+                elif worksheet_title.startswith("group_"):
+                    group_id = worksheet_title.replace("group_", "")
+                    group_contexts.append({
+                        'group_id': group_id,
+                        'context': worksheet_title
+                    })
+                    logger.info(f"Found group context (legacy): {worksheet_title}")
             
+            logger.info(f"Total group contexts found: {len(group_contexts)}")
             return group_contexts
             
         except Exception as e:
@@ -415,10 +424,22 @@ class NotificationService:
             worksheets = self.sheets_repo.spreadsheet.worksheets()
             logger.info(f"   ✅ Worksheets: {len(worksheets)}")
             for ws in worksheets:
-                logger.info(f"      - {ws.title}")
+                if ws.title.startswith("appointments_group_"):
+                    logger.info(f"      - {ws.title} (GROUP WORKSHEET)")
+                elif ws.title == "appointments_personal":
+                    logger.info(f"      - {ws.title} (PERSONAL WORKSHEET)")
+                else:
+                    logger.info(f"      - {ws.title} (OTHER)")
         else:
             logger.error("   ❌ Google Sheets not connected")
             return
+        
+        # 1.5 ตรวจสอบ Group Contexts Detection
+        logger.info("\n1.5. Group Contexts Detection:")
+        group_contexts = self._get_all_group_contexts()
+        logger.info(f"   📊 Group contexts detected: {len(group_contexts)}")
+        for gc in group_contexts:
+            logger.info(f"      - Group ID: {gc['group_id']}, Context: {gc['context']}")
         
         # 2. ตรวจสอบการนัดหมาย
         logger.info("\n2. Appointments Check:")
