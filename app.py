@@ -5,7 +5,6 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
 from dotenv import load_dotenv
-from scheduler import run_scheduled_push
 from handlers import register_handlers
 
 # เพิ่ม Notification Service
@@ -201,24 +200,6 @@ def warmup():
             'timestamp': datetime.now().isoformat()
         }), 500
 
-
-@app.route('/run-scheduler', methods=['GET'])
-def run_scheduler_endpoint():
-    """Scheduler endpoint สำหรับเรียกใช้งานจาก cron job"""
-    try:
-        now = datetime.now()
-        run_scheduled_push(now)
-        return jsonify({
-            'status': 'success',
-            'message': 'scheduler ok',
-            'timestamp': now.isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
 
 
 @app.route('/test-notification', methods=['POST', 'GET'])

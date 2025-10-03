@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Dict, Any
 import gspread
 from google.oauth2.service_account import Credentials
 from .models import Appointment
@@ -484,88 +484,9 @@ class SheetsRepository:
             logger.error(f"Error retrieving appointments for group: {e}")
             return []
     
-    def get_due_notifications(self, check_datetime: datetime = None) -> List[Tuple[Appointment, int]]:
-        """
-        ดึงรายการการนัดหมายที่ถึงเวลาแจ้งเตือน
-        
-        Args:
-            check_datetime (datetime, optional): เวลาที่จะเช็ค (ใช้เวลาปัจจุบันถ้าไม่ระบุ)
-        
-        Returns:
-            List[Tuple[Appointment, int]]: รายการ (การนัดหมาย, จำนวนวันก่อนนัด) ที่ต้องแจ้งเตือน
-        
-        TODO:
-        - ดึงการนัดหมายทั้งหมดที่ยังไม่ผ่านไป
-        - คำนวณวันที่ต้องแจ้งเตือนสำหรับแต่ละการนัดหมาย
-        - กรองการนัดหมายที่ถึงเวลาแจ้งเตือนแล้ว
-        - ตรวจสอบว่าแจ้งเตือนไปแล้วหรือยัง
-        
-        Example:
-            due_notifications = repo.get_due_notifications()
-            for appointment, lead_days in due_notifications:
-                print(f"Notify {appointment.hospital} in {lead_days} days")
-        """
-        if check_datetime is None:
-            check_datetime = datetime.now()
-        
-        logger.info(f"Getting due notifications for datetime: {check_datetime}")
-        
-        # TODO: Implement Google Sheets API integration
-        # ตัวอย่างการทำงานในอนาคต:
-        # 1. ดึงการนัดหมายทั้งหมดที่ยังไม่ผ่านไป
-        # 2. สำหรับแต่ละการนัดหมาย:
-        #    - คำนวณวันที่ต้องแจ้งเตือนตาม lead_days
-        #    - เช็คว่าถึงเวลาแจ้งเตือนแล้วหรือยัง
-        #    - เช็คว่าแจ้งเตือนไปแล้วหรือยัง (notified_flags)
-        # 3. รวบรวมรายการที่ต้องแจ้งเตือน
-        # 4. return รายการ tuples
-        
-        # สำหรับการทดสอบ - return empty list
-        return []
-    
-    def get_appointment_by_id(self, appointment_id: str) -> Optional[Appointment]:
-        """
-        ดึงข้อมูลการนัดหมายตาม ID
-        
-        Args:
-            appointment_id (str): รหัสการนัดหมาย
-        
-        Returns:
-            Optional[Appointment]: การนัดหมายที่พบ หรือ None หากไม่พบ
-        
-        TODO:
-        - ค้นหา row ที่มี appointment_id ตรงกัน
-        - แปลง row data เป็น Appointment object
-        - return None หากไม่พบ
-        """
-        logger.info(f"Getting appointment by ID: {appointment_id}")
-        
-        # TODO: Implement Google Sheets API integration
-        
-        return None
-    
-    def mark_notification_sent(self, appointment_id: str, lead_day: int) -> bool:
-        """
-        ทำเครื่องหมายว่าได้แจ้งเตือนแล้วสำหรับการนัดหมายและจำนวนวันที่กำหนด
-        
-        Args:
-            appointment_id (str): รหัสการนัดหมาย
-            lead_day (int): จำนวนวันก่อนนัดหมาย
-        
-        Returns:
-            bool: True หากทำเครื่องหมายสำเร็จ, False หากมีปัญหา
-        
-        TODO:
-        - ค้นหาการนัดหมายตาม ID
-        - อัปเดต notified_flags สำหรับ lead_day ที่กำหนด
-        - อัปเดต updated_at
-        - บันทึกกลับลงใน Google Sheets
-        """
-        logger.info(f"Marking notification sent for appointment {appointment_id}, lead_day: {lead_day}")
-        
-        # TODO: Implement Google Sheets API integration
-        
-        return True
+
+
+
 
 
 # Singleton instance สำหรับใช้งานทั่วไป
