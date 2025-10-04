@@ -38,6 +38,7 @@ class NotificationService:
         self.line_bot_api = line_bot_api
         self.scheduler = BackgroundScheduler(timezone=BANGKOK_TZ)
         self.sheets_repo = SheetsRepository()
+        self._notification_running = False  # ป้องกันการรันซ้ำ
         
         # ตั้งค่า scheduler ให้ทำงานทุกวันเวลา 09:00
         self.scheduler.add_job(
@@ -45,7 +46,8 @@ class NotificationService:
             trigger=CronTrigger(hour=9, minute=0, timezone=BANGKOK_TZ),
             id='daily_notification_check',
             name='Daily Notification Check',
-            replace_existing=True
+            replace_existing=True,
+            max_instances=1  # จำกัดให้รันได้แค่ instance เดียว
         )
         
         logger.info("NotificationService initialized with daily scheduler at 09:00 Bangkok time")
@@ -76,11 +78,18 @@ class NotificationService:
         ฟังก์ชันนี้จะถูกเรียกทุกวันเวลา 09:00
         แจ้งเตือนทุกนัดหมายที่มีอยู่ทุกวัน
         """
-        logger.info("="*50)
-        logger.info("Starting daily notification check...")
-        logger.info(f"Current time: {datetime.now(BANGKOK_TZ)}")
+        # ป้องกันการรันซ้ำ
+        if self._notification_running:
+            logger.warning("Notification check already running, skipping...")
+            return
+        
+        self._notification_running = True
         
         try:
+            logger.info("="*50)
+            logger.info("Starting daily notification check...")
+            logger.info(f"Current time: {datetime.now(BANGKOK_TZ)}")
+            
             # ตรวจสอบ Google Sheets connection
             if not self.sheets_repo.gc or not self.sheets_repo.spreadsheet:
                 logger.error("Google Sheets not connected - cannot send notifications")
@@ -129,6 +138,8 @@ class NotificationService:
             
         except Exception as e:
             logger.error(f"Error in daily notification check: {e}", exc_info=True)
+        finally:
+            self._notification_running = False  # เสร็จแล้วปลดล็อก
     
     def _get_all_group_contexts(self):
         """หา group contexts ทั้งหมดจาก Google Sheets worksheets"""
@@ -174,17 +185,28 @@ class NotificationService:
         """ดึงการนัดหมายทั้งหมดจาก Google Sheets"""
         try:
             all_appointments = []
+            logger.info("Starting to retrieve all appointments...")
             
             # ดึงการนัดหมาย Personal
             try:
+                logger.info("Attempting to retrieve personal appointments...")
                 personal_appointments = self.sheets_repo.get_appointments("", "personal")
-                all_appointments.extend(personal_appointments)
-                logger.info(f"Retrieved {len(personal_appointments)} personal appointments")
+                if personal_appointments:
+                    all_appointments.extend(personal_appointments)
+                    logger.info(f"Retrieved {len(personal_appointments)} personal appointments")
+                    # Debug: แสดงรายละเอียด personal appointments
+                    for apt in personal_appointments:
+                        logger.info(f"Personal appointment: {apt.id} - {apt.note} - User: {apt.group_id}")
+                else:
+                    logger.info("No personal appointments found")
             except Exception as e:
                 logger.error(f"Error retrieving personal appointments: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
             
             # ดึงการนัดหมาย Group - หาอัตโนมัติจาก worksheets
             try:
+                logger.info("Attempting to retrieve group appointments...")
                 group_contexts = self._get_all_group_contexts()
                 logger.info(f"Found {len(group_contexts)} group contexts")
                 
@@ -194,8 +216,14 @@ class NotificationService:
                             group_info['group_id'], 
                             group_info['context']
                         )
-                        all_appointments.extend(group_appointments)
-                        logger.info(f"Retrieved {len(group_appointments)} appointments from {group_info['context']}")
+                        if group_appointments:
+                            all_appointments.extend(group_appointments)
+                            logger.info(f"Retrieved {len(group_appointments)} appointments from {group_info['context']}")
+                            # Debug: แสดงรายละเอียด group appointments
+                            for apt in group_appointments:
+                                logger.info(f"Group appointment: {apt.id} - {apt.note} - Group: {apt.group_id}")
+                        else:
+                            logger.info(f"No appointments found in {group_info['context']}")
                     except Exception as e:
                         logger.error(f"Error retrieving appointments from {group_info['context']}: {e}")
                         
