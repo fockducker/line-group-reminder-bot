@@ -483,6 +483,125 @@ class SheetsRepository:
         except Exception as e:
             logger.error(f"Error retrieving appointments for group: {e}")
             return []
+
+    def migrate_old_headers_to_new(self) -> bool:
+        """
+        Migration function สำหรับอัปเดท headers เก่าเป็นใหม่และเพิ่ม phone_number
+        
+        Returns:
+            bool: True หาก migration สำเร็จ, False หากมีปัญหา
+        """
+        if not self.gc or not self.spreadsheet:
+            logger.error("Google Sheets not connected, cannot perform migration")
+            return False
+        
+        try:
+            logger.info("🔄 Starting migration of old headers to new format...")
+            
+            # Old to new field mapping
+            field_mapping = {
+                'hospital': 'location',
+                'department': 'building_floor_dept',
+                'doctor': 'contact_person'
+            }
+            
+            # Expected new headers
+            new_headers = [
+                'id', 'group_id', 'datetime_iso', 'location', 'building_floor_dept',
+                'contact_person', 'phone_number', 'note', 'lead_days', 'notified_flags',
+                'created_at', 'updated_at'
+            ]
+            
+            # Get all worksheets
+            worksheets = self.spreadsheet.worksheets()
+            migrated_count = 0
+            
+            for worksheet in worksheets:
+                try:
+                    # ตรวจสอบว่า worksheet มีข้อมูลหรือไม่
+                    if worksheet.row_count < 1:
+                        logger.info(f"⏭️  Skipping empty worksheet: {worksheet.title}")
+                        continue
+                    
+                    # อ่าน headers ปัจจุบัน
+                    current_headers = worksheet.row_values(1)
+                    if not current_headers:
+                        logger.info(f"⏭️  Skipping worksheet with no headers: {worksheet.title}")
+                        continue
+                    
+                    # ตรวจสอบว่าต้อง migrate หรือไม่
+                    needs_migration = any(old_field in current_headers for old_field in field_mapping.keys())
+                    has_phone_number = 'phone_number' in current_headers
+                    
+                    if not needs_migration and has_phone_number:
+                        logger.info(f"✅ Worksheet '{worksheet.title}' already migrated")
+                        continue
+                    
+                    logger.info(f"🔧 Migrating worksheet: {worksheet.title}")
+                    
+                    # Backup: อ่านข้อมูลทั้งหมด
+                    all_data = worksheet.get_all_records()
+                    if not all_data:
+                        # ถ้าไม่มีข้อมูล แค่อัปเดท headers
+                        worksheet.update('A1:L1', [new_headers])
+                        logger.info(f"📝 Updated headers for empty worksheet: {worksheet.title}")
+                        migrated_count += 1
+                        continue
+                    
+                    # เตรียมข้อมูลใหม่
+                    migrated_data = []
+                    
+                    for record in all_data:
+                        # สร้าง record ใหม่ด้วย field mapping
+                        new_record = {}
+                        
+                        for new_field in new_headers:
+                            if new_field == 'phone_number':
+                                # เพิ่ม phone_number เป็นค่าว่าง
+                                new_record[new_field] = record.get('phone_number', '')
+                            elif new_field in ['location', 'building_floor_dept', 'contact_person']:
+                                # หาคู่จาก field_mapping
+                                old_field = None
+                                for old, new in field_mapping.items():
+                                    if new == new_field:
+                                        old_field = old
+                                        break
+                                
+                                if old_field:
+                                    # ใช้ค่าเก่าถ้ามี ไม่อย่างนั้นใช้ค่าใหม่
+                                    new_record[new_field] = record.get(old_field, record.get(new_field, ''))
+                                else:
+                                    new_record[new_field] = record.get(new_field, '')
+                            else:
+                                # ฟิลด์อื่น ๆ คัดลอกตรง ๆ
+                                new_record[new_field] = record.get(new_field, '')
+                        
+                        migrated_data.append(new_record)
+                    
+                    # ล้างข้อมูลเก่าและเขียนข้อมูลใหม่
+                    worksheet.clear()
+                    
+                    # เขียน headers ใหม่
+                    worksheet.append_row(new_headers)
+                    
+                    # เขียนข้อมูลที่ migrate แล้ว
+                    for record in migrated_data:
+                        row_data = [record.get(field, '') for field in new_headers]
+                        worksheet.append_row(row_data)
+                    
+                    logger.info(f"✅ Successfully migrated worksheet '{worksheet.title}' with {len(migrated_data)} records")
+                    migrated_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error migrating worksheet '{worksheet.title}': {e}")
+                    continue
+            
+            logger.info(f"🎉 Migration completed! Migrated {migrated_count} worksheets")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Migration failed: {e}")
+            return False
     
 
 
