@@ -176,7 +176,7 @@ def warmup():
                 warmup_results['checks']['handlers'] = 'empty_response'
         except Exception as e:
             warmup_results['checks']['handlers'] = f'error: {str(e)[:50]}'
-        
+         
         elapsed_time = time.time() - start_time
         warmup_results['warmup_time_seconds'] = round(elapsed_time, 3)
         warmup_results['status'] = 'warmed_up'
@@ -355,6 +355,222 @@ def callback():
     
     return 'OK', 200
 
+
+
+@app.route('/migration')
+def migration_page():
+    """หน้าเว็บสำหรับรัน migration"""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Google Sheets Migration</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+            .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .button { padding: 12px 24px; margin: 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; text-decoration: none; display: inline-block; }
+            .button:hover { transform: translateY(-1px); }
+            .primary { background: #007bff; color: white; }
+            .primary:hover { background: #0056b3; }
+            .danger { background: #dc3545; color: white; }
+            .danger:hover { background: #c82333; }
+            .warning { background: #ffc107; color: black; }
+            .warning:hover { background: #e0a800; }
+            .success { background: #28a745; color: white; }
+            .section { margin: 30px 0; padding: 20px; border-left: 4px solid #007bff; background: #f8f9fa; }
+            .result { margin: 20px 0; padding: 15px; border-radius: 5px; white-space: pre-wrap; font-family: monospace; }
+            .result.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+            .result.error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+            .loading { display: none; text-align: center; padding: 20px; }
+            .warning-box { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔧 Google Sheets Headers Migration</h1>
+            <p>อัปเดท headers เก่าเป็นใหม่ใน Google Sheets สำหรับ LINE Bot</p>
+            
+            <div class="warning-box">
+                <strong>⚠️ สำคัญ:</strong> กรุณา backup ข้อมูลใน Google Sheets ก่อนรัน migration!
+            </div>
+            
+            <div class="section">
+                <h3>📊 1. วิเคราะห์ Worksheets</h3>
+                <p>ดูสถานะ worksheet ทั้งหมด - ไม่แก้ไขข้อมูลอะไร</p>
+                <button class="button primary" onclick="runMigration('analyze')">📊 Analyze Worksheets</button>
+            </div>
+            
+            <div class="section">
+                <h3>🧪 2. ทดสอบ Migration (Dry Run)</h3>
+                <p>ดูว่าจะเปลี่ยนอะไรบ้าง - ไม่แก้ไขข้อมูลจริง</p>
+                <button class="button warning" onclick="runMigration('dry-run')">🧪 Dry Run Migration</button>
+            </div>
+            
+            <div class="section">
+                <h3>🚀 3. รัน Migration จริง</h3>
+                <p><strong>⚠️ จะแก้ไข Google Sheets จริง! เขียนทับข้อมูลเก่า!</strong></p>
+                <button class="button danger" onclick="confirmAndRun()">🚀 Execute Migration</button>
+            </div>
+            
+            <div id="loading" class="loading">
+                <h3>⏳ กำลังประมวลผล...</h3>
+                <p>กรุณารอสักครู่ (อาจใช้เวลา 1-2 นาที)</p>
+            </div>
+            
+            <div id="result" class="result" style="display: none;"></div>
+        </div>
+
+        <script>
+            function confirmAndRun() {
+                if (confirm('⚠️ แน่ใจหรือว่าต้องการแก้ไข Google Sheets?\\n\\n- จะเขียนทับข้อมูลเก่า\\n- hospital → location\\n- department → building_floor_dept\\n- doctor → contact_person\\n- เพิ่ม phone_number column\\n\\nกรุณายืนยันว่าได้ backup ข้อมูลแล้ว!')) {
+                    runMigration('execute');
+                }
+            }
+            
+            async function runMigration(mode) {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('result').style.display = 'none';
+                
+                try {
+                    const response = await fetch('/migration/run', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ mode: mode })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('result').innerHTML = data.output;
+                    document.getElementById('result').className = 'result ' + (data.success ? 'success' : 'error');
+                    
+                } catch (error) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('result').innerHTML = 'เกิดข้อผิดพลาด: ' + error.message;
+                    document.getElementById('result').className = 'result error';
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
+
+@app.route('/migration/run', methods=['POST'])
+def run_migration():
+    """รัน migration ตาม mode ที่เลือก"""
+    try:
+        data = request.get_json()
+        mode = data.get('mode', 'analyze')
+        
+        print(f"[MIGRATION] Running migration with mode: {mode}")
+        
+        # Import migrator
+        from migrate_headers import HeaderMigrator
+        
+        # สร้าง migrator
+        migrator = HeaderMigrator()
+        
+        if mode == 'analyze':
+            analysis = migrator.analyze_worksheets()
+            
+            output = "📊 WORKSHEET ANALYSIS:\\n"
+            output += "=" * 60 + "\\n"
+            
+            for name, info in analysis.items():
+                status = info.get('status', 'unknown')
+                needs_migration = info.get('needs_migration', False)
+                data_rows = info.get('data_rows', 0)
+                
+                output += f"📄 {name}\\n"
+                output += f"   Status: {status}\\n"
+                output += f"   Data rows: {data_rows}\\n"
+                output += f"   Needs migration: {'Yes' if needs_migration else 'No'}\\n"
+                
+                if 'headers' in info and info['headers']:
+                    headers_str = ', '.join(info['headers'][:6])
+                    if len(info['headers']) > 6:
+                        headers_str += ", ..."
+                    output += f"   Headers: [{headers_str}]\\n"
+                output += "\\n"
+            
+            return jsonify({'success': True, 'output': output})
+        
+        elif mode == 'dry-run':
+            results = migrator.migrate_all(dry_run=True)
+            
+            output = "🧪 DRY RUN RESULTS:\\n"
+            output += "=" * 60 + "\\n"
+            
+            if not results:
+                output += "✅ No worksheets need migration.\\n"
+                output += "All worksheets are already in new format!\\n"
+            else:
+                output += f"Found {len(results)} worksheet(s) to migrate:\\n\\n"
+                for worksheet, success in results.items():
+                    status = "✅ Would succeed" if success else "❌ Would fail"
+                    output += f"{status}: {worksheet}\\n"
+                
+                output += "\\n💡 This was a DRY RUN - no actual changes made.\\n"
+                output += "Use 'Execute Migration' to apply changes.\\n"
+            
+            return jsonify({'success': True, 'output': output})
+        
+        elif mode == 'execute':
+            print(f"[MIGRATION] Executing real migration...")
+            results = migrator.migrate_all(dry_run=False)
+            
+            output = "🚀 MIGRATION RESULTS:\\n"
+            output += "=" * 60 + "\\n"
+            
+            if not results:
+                output += "✅ No worksheets needed migration.\\n"
+                output += "All worksheets are already in new format!\\n"
+                success = True
+            else:
+                success_count = sum(1 for success in results.values() if success)
+                total_count = len(results)
+                
+                for worksheet, success in results.items():
+                    status = "✅ Success" if success else "❌ Failed"
+                    output += f"{status}: {worksheet}\\n"
+                
+                output += f"\\n📊 Summary: {success_count}/{total_count} worksheets migrated successfully\\n\\n"
+                
+                if success_count == total_count and total_count > 0:
+                    output += "🎉 Migration completed successfully!\\n"
+                    output += "\\n✅ Headers updated:\\n"
+                    output += "   hospital → location\\n"
+                    output += "   department → building_floor_dept\\n"
+                    output += "   doctor → contact_person\\n"
+                    output += "   + phone_number (empty)\\n"
+                    success = True
+                elif success_count > 0:
+                    output += "⚠️ Migration partially successful.\\n"
+                    output += "Check individual worksheet results above.\\n"
+                    success = False
+                else:
+                    output += "❌ Migration failed.\\n"
+                    output += "Check server logs for detailed error information.\\n"
+                    success = False
+            
+            return jsonify({'success': success, 'output': output})
+        
+        else:
+            return jsonify({'success': False, 'output': f'❌ Invalid mode: {mode}'})
+    
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[MIGRATION] Error: {error_msg}")
+        return jsonify({
+            'success': False, 
+            'output': f'❌ เกิดข้อผิดพลาด:\\n{error_msg}\\n\\nกรุณาตรวจสอบ:\\n- Environment variables ครบถ้วน\\n- เชื่อมต่อ Google Sheets ได้\\n- Service account มีสิทธิ์แก้ไข Sheets'
+        })
 
 
 @app.errorhandler(404)
