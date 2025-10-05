@@ -52,13 +52,13 @@ class SmartDateTimeParser:
             'sunday': r'(วันอาทิตย์|อาทิตย์|sunday)',
         }
         
-        # Pattern สำหรับชื่อหมอ
-        self.doctor_patterns = {
-            # Doctor titles and names
-            'doctor_title': r'(นพ\.|นพ|ดร\.|ดอกเตอร์|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.)',
-            'doctor_with_name': r'(นพ\.|นพ|ดร\.|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.)\s*([ก-๙a-zA-Z\s]+)',
-            'simple_doctor': r'หมอ([ก-๙a-zA-Z]+)',
-            'doctor_specialty': r'หมอ(โรค[ก-๙]+|[ก-๙]+โรค|เด็ก|ตา|หู|คอ|จมูก|ฟัน|หัวใจ|ไต|กระดูก)',
+        # Pattern สำหรับบุคคล/ผู้ติดต่อ (เดิม: หมอ)
+        self.contact_person_patterns = {
+            # Contact person titles and names
+            'contact_title': r'(นพ\.|นพ|ดร\.|ดอกเตอร์|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.|บุคคล|ผู้ติดต่อ)',
+            'contact_with_name': r'(นพ\.|นพ|ดร\.|หมอ|แพทย์|พศ\.|ผศ\.|รศ\.|ศ\.|บุคคล|ผู้ติดต่อ)\s*([ก-๙a-zA-Z\s]+)',
+            'simple_contact': r'หมอ([ก-๙a-zA-Z]+)',
+            'contact_specialty': r'หมอ(โรค[ก-๙]+|[ก-๙]+โรค|เด็ก|ตา|หู|คอ|จมูก|ฟัน|หัวใจ|ไต|กระดูก)',
         }
         
         # Pattern สำหรับเวลา
@@ -247,37 +247,37 @@ class SmartDateTimeParser:
         
         return None, text
     
-    def _parse_doctor_info(self, text: str) -> Tuple[Optional[str], str]:
-        """แยกวิเคราะห์ข้อมูลหมอจากข้อความ"""
+    def _parse_contact_person_info(self, text: str) -> Tuple[Optional[str], str]:
+        """แยกวิเคราะห์ข้อมูลบุคคล/ผู้ติดต่อจากข้อความ (เดิม: หมอ)"""
         
         text_original = text
-        doctor_name = None
+        contact_person_name = None
         
-        # 1. ตรวจหา doctor with full name (นพ.สมชาย, ดร.วิชัย)
-        for pattern_name, pattern in self.doctor_patterns.items():
-            if pattern_name == 'doctor_with_name':
+        # 1. ตรวจหา contact person with full name (นพ.สมชาย, ดร.วิชัย)
+        for pattern_name, pattern in self.contact_person_patterns.items():
+            if pattern_name == 'contact_with_name':
                 match = re.search(pattern, text)
                 if match:
                     title = match.group(1)
                     name = match.group(2).strip()
-                    doctor_name = f"{title}{name}"
-                    # ลบข้อมูลหมอออกจากข้อความ
+                    contact_person_name = f"{title}{name}"
+                    # ลบข้อมูลผู้ติดต่อออกจากข้อความ
                     text = text[:match.start()] + text[match.end():]
-                    return doctor_name, text.strip()
+                    return contact_person_name, text.strip()
         
-        # 2. ตรวจหา simple doctor (หมอแดง)
-        match = re.search(self.doctor_patterns['simple_doctor'], text)
+        # 2. ตรวจหา simple contact (หมอแดง)
+        match = re.search(self.contact_person_patterns['simple_contact'], text)
         if match:
             name = match.group(1).strip()
-            doctor_name = f"หมอ{name}"
+            contact_person_name = f"หมอ{name}"
             text = text[:match.start()] + text[match.end():]
-            return doctor_name, text.strip()
+            return contact_person_name, text.strip()
         
-        # 3. ตรวจหา doctor specialty (หมอโรคหัวใจ)
-        match = re.search(self.doctor_patterns['doctor_specialty'], text)
+        # 3. ตรวจหา contact specialty (หมอโรคหัวใจ)
+        match = re.search(self.contact_person_patterns['contact_specialty'], text)
         if match:
             specialty = match.group(1).strip()
-            doctor_name = f"หมอ{specialty}"
+            contact_person_name = f"หมอ{specialty}"
             text = text[:match.start()] + text[match.end():]
             return doctor_name, text.strip()
         
@@ -296,9 +296,10 @@ class SmartDateTimeParser:
         แยกวิเคราะห์ข้อความแบบ structured format:
         ชื่อนัดหมาย: "..."
         วันเวลา: "..."
-        แพทย์: "..."
-        โรงพยาบาล: "..."
-        แผนก: "..."
+        บุคคล/ผู้ติดต่อ: "..." (เดิม: แพทย์)
+        สถานที่: "..." (เดิม: โรงพยาบาล)
+        อาคาร/แผนก/ชั้น: "..." (เดิม: แผนก)
+        เบอร์โทร: "..." (ใหม่)
         """
         
         # ตรวจสอบว่ามี structured format หรือไม่
@@ -307,12 +308,24 @@ class SmartDateTimeParser:
             
         logger.info(f"Parsing structured appointment: {text}")
         
-        # แยกแต่ละ field
+        # แยกแต่ละ field (รองรับทั้งรูปแบบเก่าและใหม่)
         title = self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\r\n]+)["\']?')
         datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\r\n]+)["\']?')
-        doctor = self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\r\n]+)["\']?')
-        hospital = self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\r\n]+)["\']?')
-        department = self._extract_field(text, r'แผนก:\s*["\']?([^"\'\r\n]+)["\']?')
+        
+        # Contact person (รองรับทั้งแพทย์, บุคคล, ผู้ติดต่อ)
+        contact_person = (self._extract_field(text, r'(?:แพทย์|บุคคล|ผู้ติดต่อ):\s*["\']?([^"\'\r\n]+)["\']?') or
+                         self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\r\n]+)["\']?'))
+        
+        # Location (รองรับทั้งโรงพยาบาล, สถานที่)
+        location = (self._extract_field(text, r'(?:โรงพยาบาล|สถานที่):\s*["\']?([^"\'\r\n]+)["\']?') or
+                   self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\r\n]+)["\']?'))
+        
+        # Building/Floor/Department (รองรับทั้งแผนก, อาคาร, ชั้น)
+        building_floor_dept = (self._extract_field(text, r'(?:แผนก|อาคาร|ชั้น):\s*["\']?([^"\'\r\n]+)["\']?') or
+                              self._extract_field(text, r'แผนก:\s*["\']?([^"\'\r\n]+)["\']?'))
+        
+        # Phone number (ใหม่)
+        phone_number = self._extract_field(text, r'(?:เบอร์โทร|โทรศัพท์):\s*["\']?([^"\'\r\n]+)["\']?')
         
         # ตรวจสอบ required fields
         if not datetime_str:
@@ -328,10 +341,14 @@ class SmartDateTimeParser:
         return {
             'datetime': appointment_dt,
             'title': title or "การนัดหมาย",
-            'doctor': doctor or "ไม่ระบุ",
-            'location': hospital or "ไม่ระบุ",
-            'hospital': hospital or "ไม่ระบุ",
-            'department': department or "ทั่วไป",
+            'contact_person': contact_person or "ไม่ระบุ",
+            'location': location or "ไม่ระบุ",
+            'building_floor_dept': building_floor_dept or "ทั่วไป",
+            'phone_number': phone_number or "",
+            # Backward compatibility
+            'doctor': contact_person or "ไม่ระบุ",
+            'hospital': location or "ไม่ระบุ",
+            'department': building_floor_dept or "ทั่วไป",
             'error': None
         }
     
@@ -450,9 +467,9 @@ class SmartDateTimeParser:
         title_match = re.search(r'^([^พบ]+?)(?:\s*พบ|$)', remaining_after_dept)
         appointment_title = title_match.group(1).strip() if title_match else "การนัดหมาย"
         
-        # แยกชื่อหมอ
-        doctor_match = re.search(r'พบ\s*(.+?)$', text)
-        doctor_name = doctor_match.group(1).strip() if doctor_match else "ไม่ระบุ"
+        # แยกชื่อผู้ติดต่อ (เดิม: หมอ)
+        contact_match = re.search(r'พบ\s*(.+?)$', text)
+        contact_person_name = contact_match.group(1).strip() if contact_match else "ไม่ระบุ"
         
         
         # สร้าง datetime object
@@ -467,8 +484,12 @@ class SmartDateTimeParser:
         return {
             'datetime': appointment_dt,
             'title': appointment_title,
-            'doctor': doctor_name,
+            'contact_person': contact_person_name,
             'location': hospital_name,
+            'building_floor_dept': department_name,
+            'phone_number': "",
+            # Backward compatibility
+            'doctor': contact_person_name,
             'hospital': hospital_name,
             'department': department_name,
             'error': None
@@ -500,7 +521,12 @@ class SmartDateTimeParser:
             return {
                 'datetime': None,
                 'title': 'นัดหมายใหม่',
+                'contact_person': '',
                 'location': '',
+                'building_floor_dept': '',
+                'phone_number': '',
+                # Backward compatibility
+                'doctor': '',
                 'hospital': '',
                 'department': '',
                 'error': 'กรุณาระบุรายละเอียดการนัดหมาย'
@@ -519,8 +545,8 @@ class SmartDateTimeParser:
         # แยกวันที่และเวลา
         parsed_datetime, remaining_text = self.parse_datetime(clean_message)
         
-        # แยกข้อมูลหมอ
-        doctor_name, remaining_text = self._parse_doctor_info(remaining_text)
+        # แยกข้อมูลผู้ติดต่อ (เดิม: หมอ)
+        contact_person_name, remaining_text = self._parse_contact_person_info(remaining_text)
         
         # แยกข้อมูลเพิ่มเติม
         parts = remaining_text.split()
@@ -545,9 +571,9 @@ class SmartDateTimeParser:
         # ส่วนที่เหลือเป็นชื่อการนัดหมาย
         title_parts = other_parts if other_parts else ['นัดหมาย']
         
-        # ถ้ามีชื่อหมอ ให้รวมเข้าไปในชื่อการนัดหมาย
-        if doctor_name:
-            title = f"พบ {doctor_name}"
+        # ถ้ามีชื่อผู้ติดต่อ ให้รวมเข้าไปในชื่อการนัดหมาย
+        if contact_person_name:
+            title = f"พบ {contact_person_name}"
             if other_parts:
                 title += f" ({' '.join(other_parts)})"
         else:
@@ -556,8 +582,12 @@ class SmartDateTimeParser:
         return {
             'datetime': parsed_datetime,
             'title': title,
-            'doctor': doctor_name if doctor_name else 'ไม่ระบุ',
-            'location': hospital,
+            'contact_person': contact_person_name if contact_person_name else 'ไม่ระบุ',
+            'location': hospital if hospital else 'ไม่ระบุ',
+            'building_floor_dept': 'ทั่วไป',
+            'phone_number': '',
+            # Backward compatibility
+            'doctor': contact_person_name if contact_person_name else 'ไม่ระบุ',
             'hospital': hospital if hospital else 'ไม่ระบุ',
             'department': 'ทั่วไป',
             'error': None
