@@ -8,6 +8,7 @@ import uuid
 import time
 from datetime import datetime, timedelta
 from linebot.v3.messaging import ReplyMessageRequest, TextMessage
+from storage.sheets_repo import SheetsRepository
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from storage.models import Appointment
@@ -75,7 +76,8 @@ def register_handlers(handler, line_bot_api):
         if context_type == "group":
             # ตอบเฉพาะคำสั่งที่เกี่ยวข้องกับการจัดการนัดหมาย
             if not message_lower.startswith(('เพิ่มนัด', 'ดูนัด', 'ลบนัด', 'แก้ไขนัด', 'แก้นัด', 'ยกเลิกนัด', 'ลบการนัด', 'นัดใหม่', 'เพิ่มการนัด', 'แก้ไขการนัด',
-                                           'hello', 'สวัสดี', 'ทักทาย', 'help', 'คำสั่ง', 'สถานะ', 'เตือน', 'ทดสอบ')):
+                                              'ดูนัดย้อนหลัง', 'นัดย้อนหลัง', 'ประวัตินัด',
+                                              'hello', 'สวัสดี', 'ทักทาย', 'help', 'คำสั่ง', 'สถานะ', 'เตือน', 'ทดสอบ')):
                 # ไม่ใช่คำสั่งสำหรับบอท ให้ข้าม
                 return
             
@@ -146,7 +148,13 @@ def register_handlers(handler, line_bot_api):
         
         # คำสั่งดูการนัดหมาย
         elif message_lower in ['ดูนัด', 'รายการนัด', 'นัดหมาย', 'ดูการนัด']:
-            reply_message = handle_list_appointments_command(user_id, context_type, context_id)
+            reply_message = handle_list_appointments_command(user_id, context_type, context_id, show_past=False)
+            
+        elif message_lower in ['ดูนัดย้อนหลัง', 'นัดย้อนหลัง', 'ประวัตินัด', 'ดูประวัตินัด']:
+            reply_message = handle_historical_appointments_menu(user_id, context_type, context_id)
+            
+        elif message_lower.startswith(('ย้อนหลัง', 'ดูย้อนหลัง')):
+            reply_message = handle_historical_appointments_command(user_message, user_id, context_type, context_id)
         
         # คำสั่งลบการนัดหมาย (รองรับแบบยืดหยุ่น)
         elif message_lower.startswith(('ลบนัด', 'ยกเลิกนัด', 'ลบการนัด')):
@@ -329,8 +337,21 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                     # แสดงข้อมูลที่ parsed ได้
                     date_str = appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')
                     
+                    # ตรวจสอบว่าเป็นนัดหมายในอดีตหรือไม่
+                    import pytz
+                    bangkok_tz = pytz.timezone('Asia/Bangkok')
+                    now = datetime.now(bangkok_tz)
+                    is_past_appointment = appointment.appointment_datetime < now
+                    
                     # สร้างข้อความตอบกลับ
-                    result_message = f"""✅ บันทึกนัดหมายสำเร็จ!
+                    if is_past_appointment:
+                        result_message = f"""⚠️ คำเตือน: นัดหมายในอดีต!
+
+📝 ชื่อนัดหมาย: "{title}"
+🆔 รหัส: {appointment.id}
+📅 วันเวลา: {date_str} (อดีต)"""
+                    else:
+                        result_message = f"""✅ บันทึกนัดหมายสำเร็จ!
 
 📝 ชื่อนัดหมาย: "{title}"
 🆔 รหัส: {appointment.id}
@@ -344,7 +365,16 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
 📍 สถานที่: {hospital}
 🏢 อาคาร/แผนก/ชั้น: {department}
 
-✅ ข้อมูลถูกบันทึกแล้ว
+✅ ข้อมูลถูกบันทึกแล้ว"""
+
+                    # เพิ่มข้อความเตือนและคำแนะนำตามประเภทนัดหมาย
+                    if is_past_appointment:
+                        result_message += f"""
+📋 นัดหมายนี้จะปรากฏใน "ดูนัดย้อนหลัง" เท่านั้น
+💡 หากต้องการดูใช้คำสั่ง "ดูนัดย้อนหลัง"
+⚠️ ระบบแจ้งเตือนจะไม่ทำงานกับนัดหมายในอดีต"""
+                    else:
+                        result_message += f"""
 🔔 ระบบจะแจ้งเตือน 7 วัน และ 1 วันก่อนนัดหมาย"""
                     
                     return result_message
@@ -374,8 +404,12 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
         return "เกิดข้อผิดพลาดในการเพิ่มนัดหมาย กรุณาลองใหม่อีกครั้ง"
 
 
-def handle_list_appointments_command(user_id: str, context_type: str, context_id: str) -> str:
-    """จัดการคำสั่งดูรายการนัดหมาย"""
+def handle_list_appointments_command(user_id: str, context_type: str, context_id: str, show_past: bool = True) -> str:
+    """จัดการคำสั่งดูรายการนัดหมาย
+    
+    Args:
+        show_past (bool): True = แสดงทั้งอนาคตและอดีต, False = แสดงเฉพาะอนาคต
+    """
     try:
         repo = SheetsRepository()
         
@@ -415,8 +449,15 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
         # เรียงอดีต: ล่าสุดก่อน (descending) 
         past_appointments.sort(key=lambda apt: apt.appointment_datetime, reverse=True)
         
-        # รวมกัน: อนาคตก่อน แล้วตามด้วยอดีต
-        appointments = future_appointments + past_appointments
+        # รวมกันตาม show_past parameter
+        if show_past:
+            # แสดงทั้งอนาคตและอดีต (เดิม)
+            appointments = future_appointments + past_appointments
+            list_title = "📋 รายการนัดหมายของคุณ"
+        else:
+            # แสดงเฉพาะอนาคต (ใหม่)
+            appointments = future_appointments
+            list_title = "📋 นัดหมายที่กำลังจะมาถึง"
         
         # จำกัดการแสดงผลเพื่อป้องกันข้อความยาวเกินไป
         MAX_APPOINTMENTS = 10  # แสดงแค่ 10 รายการแรก
@@ -426,7 +467,7 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
             appointments = appointments[:MAX_APPOINTMENTS]
             
         # สร้างรายการนัดหมาย
-        appointment_list = f"📋 รายการนัดหมายของคุณ ({total_appointments} รายการ)\n\n"
+        appointment_list = f"{list_title} ({total_appointments} รายการ)\n\n"
         
         for i, appointment in enumerate(appointments, 1):
             date_str = appointment.appointment_datetime.strftime("%d/%m/%Y %H:%M")
@@ -450,10 +491,19 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
             appointment_list += f"     🆔 {appointment.id}\n\n"
         
         # เพิ่มข้อความถ้ามีการนัดหมายมากกว่าที่แสดง
-        footer = """💡 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย
+        if show_past:
+            footer = """💡 คำสั่งที่เป็นประโยชน์:
+• 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย
+• 'ดูนัด' เพื่อดูเฉพาะนัดหมายที่กำลังจะมาถึง
 
 🔴 = นัดหมายใกล้ถึง
 ⚪ = นัดหมายที่ผ่านแล้ว"""
+        else:
+            footer = """💡 คำสั่งที่เป็นประโยชน์:
+• 'ลบนัด [รหัส]' เพื่อลบการนัดหมาย  
+• 'ดูนัดย้อนหลัง' เพื่อดูประวัตินัดหมายที่ผ่านมา
+
+🔴 = นัดหมายใกล้ถึง"""
         
         if total_appointments > MAX_APPOINTMENTS:
             footer = f"""⚠️ แสดง {MAX_APPOINTMENTS} จาก {total_appointments} รายการ
@@ -466,6 +516,190 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
     except Exception as e:
         logger.error(f"Error in handle_list_appointments_command: {e}")
         return "เกิดข้อผิดพลาดในการดึงข้อมูลนัดหมาย กรุณาลองใหม่อีกครั้ง"
+
+
+def handle_historical_appointments_menu(user_id: str, context_type: str, context_id: str) -> str:
+    """แสดงเมนูเลือกระยะเวลาย้อนหลัง"""
+    
+    menu = f"""📚 ดูประวัตินัดหมายย้อนหลัง
+
+⏰ เลือกระยะเวลาที่ต้องการดู:
+
+🔢 **ระยะเวลาย้อนหลัง:**
+• พิมพ์ "ย้อนหลัง 1 เดือน" หรือ "ดูย้อนหลัง 1 เดือน"
+• พิมพ์ "ย้อนหลัง 2 เดือน" หรือ "ดูย้อนหลัง 2 เดือน"
+• พิมพ์ "ย้อนหลัง 3 เดือน" หรือ "ดูย้อนหลัง 3 เดือน"
+• พิมพ์ "ย้อนหลัง 6 เดือน" หรือ "ดูย้อนหลัง 6 เดือน"
+• พิมพ์ "ย้อนหลัง 1 ปี" หรือ "ดูย้อนหลัง 1 ปี"
+
+📅 **เดือนเฉพาะ:**
+• พิมพ์ "ย้อนหลัง ตุลาคม 2025" หรือ "ดูย้อนหลัง ตุลาคม 2025"
+• พิมพ์ "ย้อนหลัง กันยายน 2025" หรือ "ดูย้อนหลัง กันยายน 2025"
+• พิมพ์ "ย้อนหลัง สิงหาคม 2025" เป็นต้น
+
+💡 ตัวอย่าง: "ย้อนหลัง 2 เดือน" หรือ "ย้อนหลัง มีนาคม 2025" """
+    
+    return menu
+
+
+def handle_historical_appointments_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
+    """จัดการคำสั่งดูนัดหมายย้อนหลัง"""
+    import re
+    from datetime import datetime, timedelta
+    import pytz
+    
+    try:
+        # ใช้ Bangkok timezone
+        bangkok_tz = pytz.timezone('Asia/Bangkok')
+        now = datetime.now(bangkok_tz)
+        
+        message_lower = user_message.lower()
+        
+        # Pattern สำหรับระยะเวลาย้อนหลัง
+        months_pattern = r'(?:ย้อนหลัง|ดูย้อนหลัง)\s*(\d+)\s*(?:เดือน|month)'
+        year_pattern = r'(?:ย้อนหลัง|ดูย้อนหลัง)\s*(\d+)\s*(?:ปี|year)'
+        
+        # Pattern สำหรับเดือนเฉพาะ (ใช้ word boundary และ unicode range ที่เฉพาะเจาะจง)
+        specific_month_pattern = r'(?:ย้อนหลัง|ดูย้อนหลัง)\s+(มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)\s+(\d{4})'
+        
+        start_date = None
+        end_date = None
+        period_description = ""
+        
+        # ตรวจสอบ pattern เดือนย้อนหลัง
+        months_match = re.search(months_pattern, message_lower)
+        if months_match:
+            months = int(months_match.group(1))
+            if months > 12:
+                return "❌ สามารถดูย้อนหลังได้สูงสุด 12 เดือน"
+            
+            start_date = now - timedelta(days=months * 30)  # ประมาณ 30 วันต่อเดือน
+            end_date = now
+            period_description = f"{months} เดือนที่ผ่านมา"
+            
+        # ตรวจสอบ pattern ปีย้อนหลัง  
+        elif re.search(year_pattern, message_lower):
+            year_match = re.search(year_pattern, message_lower)
+            years = int(year_match.group(1))
+            if years > 2:
+                return "❌ สามารถดูย้อนหลังได้สูงสุด 2 ปี"
+                
+            start_date = now - timedelta(days=years * 365)
+            end_date = now
+            period_description = f"{years} ปีที่ผ่านมา"
+            
+        # ตรวจสอบ pattern เดือนเฉพาะ
+        elif re.search(specific_month_pattern, message_lower):
+            month_match = re.search(specific_month_pattern, message_lower)
+            month_thai = month_match.group(1)
+            year = int(month_match.group(2))
+            
+            # แปลงเดือนไทยเป็นตัวเลข
+            thai_months = {
+                'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+                'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+                'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+            }
+            
+            month_num = thai_months.get(month_thai)
+            if not month_num:
+                return f"❌ ไม่พบเดือน '{month_thai}' กรุณาใช้ชื่อเดือนภาษาไทยที่ถูกต้อง"
+            
+            # สร้างช่วงเวลาของเดือนนั้น
+            start_date = datetime(year, month_num, 1, 0, 0, 0, tzinfo=bangkok_tz)
+            if month_num == 12:
+                end_date = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=bangkok_tz)
+            else:
+                end_date = datetime(year, month_num + 1, 1, 0, 0, 0, tzinfo=bangkok_tz)
+                
+            period_description = f"{month_thai} {year}"
+            
+        else:
+            return """❌ รูปแบบไม่ถูกต้อง
+
+💡 ตัวอย่างที่ถูกต้อง:
+• "ย้อนหลัง 2 เดือน"
+• "ดูย้อนหลัง 6 เดือน" 
+• "ย้อนหลัง 1 ปี"
+• "ย้อนหลัง ตุลาคม 2025"
+• "ดูย้อนหลัง กันยายน 2025" """
+        
+        # ดึงข้อมูลนัดหมาย
+        repo = SheetsRepository()
+        
+        if context_type == "group":
+            sheets_context = f"group_{context_id}"
+            group_id_for_query = context_id
+        else:
+            sheets_context = "personal"
+            group_id_for_query = user_id
+        
+        appointments = repo.get_appointments(group_id_for_query, sheets_context)
+        
+        if not appointments:
+            return f"""📚 ประวัตินัดหมาย - {period_description}
+
+❌ ไม่พบการนัดหมายในช่วงเวลาที่ระบุ
+
+💡 พิมพ์ "ดูนัดย้อนหลัง" เพื่อเลือกช่วงเวลาอื่น"""
+        
+        # กรองนัดหมายในช่วงเวลาที่กำหนด
+        filtered_appointments = []
+        for apt in appointments:
+            if start_date <= apt.appointment_datetime < end_date:
+                filtered_appointments.append(apt)
+        
+        if not filtered_appointments:
+            return f"""📚 ประวัตินัดหมาย - {period_description}
+
+❌ ไม่พบการนัดหมายในช่วงเวลาที่ระบุ
+
+💡 พิมพ์ "ดูนัดย้อนหลัง" เพื่อเลือกช่วงเวลาอื่น"""
+        
+        # เรียงลำดับจากใหม่ไปเก่า
+        filtered_appointments.sort(key=lambda apt: apt.appointment_datetime, reverse=True)
+        
+        # จำกัดการแสดงผล
+        MAX_HISTORICAL = 20
+        total_found = len(filtered_appointments)
+        
+        if total_found > MAX_HISTORICAL:
+            filtered_appointments = filtered_appointments[:MAX_HISTORICAL]
+        
+        # สร้างรายการ
+        appointment_list = f"""📚 ประวัตินัดหมาย - {period_description}
+พบ {total_found} รายการ
+
+"""
+        
+        for i, appointment in enumerate(filtered_appointments, 1):
+            date_str = appointment.appointment_datetime.strftime("%d/%m/%Y %H:%M")
+            
+            appointment_list += f"📅 {i}. ⚪ {appointment.note}\n"
+            appointment_list += f"     🕐 {date_str}\n"
+            if appointment.location and appointment.location != "LINE Bot":
+                appointment_list += f"     📍 {appointment.location}\n"
+            if appointment.building_floor_dept and appointment.building_floor_dept != "General":
+                appointment_list += f"     🏢 {appointment.building_floor_dept}\n"
+            if getattr(appointment, 'contact_person', None) and appointment.contact_person:
+                appointment_list += f"     👤 {appointment.contact_person}\n"
+            if getattr(appointment, 'phone_number', None) and appointment.phone_number:
+                appointment_list += f"     📞 {appointment.phone_number}\n"
+            appointment_list += f"     🆔 {appointment.id}\n\n"
+        
+        # Footer
+        footer = "⚪ = นัดหมายที่ผ่านแล้ว\n💡 พิมพ์ \"ดูนัดย้อนหลัง\" เพื่อเลือกช่วงเวลาอื่น"
+        
+        if total_found > MAX_HISTORICAL:
+            footer = f"""⚠️ แสดง {MAX_HISTORICAL} จาก {total_found} รายการ
+
+""" + footer
+        
+        return appointment_list + footer
+        
+    except Exception as e:
+        logger.error(f"Error in handle_historical_appointments_command: {e}")
+        return "เกิดข้อผิดพลาดในการดึงข้อมูลประวัตินัดหมาย กรุณาลองใหม่อีกครั้ง"
 
 
 def handle_delete_appointment_command(user_message: str, user_id: str, context_type: str, context_id: str) -> str:
