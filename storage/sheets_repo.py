@@ -159,16 +159,16 @@ class SheetsRepository:
                 logger.error(f"Cannot get worksheet for context: {context}")
                 return False
             
-            # แปลง Appointment object เป็น row data
+            # แปลง Appointment object เป็น row data ตาม headers ใหม่
             row_data = [
                 appointment.id,
                 appointment.group_id,
                 appointment.datetime_iso,
-                appointment.hospital,
-                appointment.department,
-                appointment.doctor,
+                appointment.location,  # ใช้ชื่อใหม่แทน hospital
+                appointment.building_floor_dept,  # ใช้ชื่อใหม่แทน department
+                appointment.contact_person,  # ใช้ชื่อใหม่แทน doctor
+                appointment.phone_number,  # เพิ่ม phone_number
                 appointment.note,
-                appointment.location,
                 str(appointment.lead_days),  # Convert list to string
                 str(appointment.notified_flags),  # Convert list to string
                 appointment.created_at,
