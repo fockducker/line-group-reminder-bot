@@ -276,13 +276,16 @@ class NotificationService:
 
 {status_emoji} {status_msg}
 
-🏥 {appointment.note}
+📋 {appointment.note}
 📅 วันที่: {appointment_date.strftime('%d/%m/%Y %H:%M')}
-🏢 สถานที่: {appointment.hospital}
-🔖 แผนก: {appointment.department}"""
+📍 สถานที่: {appointment.location}
+🏢 อาคาร/แผนก/ชั้น: {appointment.building_floor_dept}"""
             
-            if hasattr(appointment, 'doctor') and appointment.doctor:
-                message += f"\n👨‍⚕️ แพทย์: {appointment.doctor}"
+            if hasattr(appointment, 'contact_person') and appointment.contact_person:
+                message += f"\n� บุคคล/ผู้ติดต่อ: {appointment.contact_person}"
+            
+            if hasattr(appointment, 'phone_number') and appointment.phone_number:
+                message += f"\n📞 เบอร์โทร: {appointment.phone_number}"
             
             message += f"\n🆔 รหัส: {appointment.id}"
             
@@ -358,10 +361,10 @@ class NotificationService:
                     
                     message += f"{status_emoji} {status_text} - {appointment.note}\n"
                     message += f"   📅 {appointment.appointment_datetime.strftime('%H:%M')}"
-                    if appointment.hospital and appointment.hospital != "LINE Bot":
-                        message += f" ที่ {appointment.hospital}"
-                    if getattr(appointment, 'doctor', None) and appointment.doctor:
-                        message += f" พบ {appointment.doctor}"
+                    if appointment.location and appointment.location != "LINE Bot":
+                        message += f" ที่ {appointment.location}"
+                    if getattr(appointment, 'contact_person', None) and appointment.contact_person:
+                        message += f" พบ {appointment.contact_person}"
                     message += f"\n   🆔 {appointment.id}\n\n"
             
             # แสดงนัดหมายสัปดาห์นี้
@@ -370,8 +373,8 @@ class NotificationService:
                 for appointment, days_diff in upcoming_appointments:
                     message += f"🔴 ในอีก {days_diff} วัน - {appointment.note}\n"
                     message += f"   📅 {appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')}"
-                    if appointment.hospital and appointment.hospital != "LINE Bot":
-                        message += f" ที่ {appointment.hospital}"
+                    if appointment.location and appointment.location != "LINE Bot":
+                        message += f" ที่ {appointment.location}"
                     message += f"\n   🆔 {appointment.id}\n\n"
             
             # แสดงนัดหมายในอนาคต (จำกัด 3 รายการแรก)
@@ -380,8 +383,8 @@ class NotificationService:
                 for appointment, days_diff in future_appointments[:3]:
                     message += f"📅 ในอีก {days_diff} วัน - {appointment.note}\n"
                     message += f"   📅 {appointment.appointment_datetime.strftime('%d/%m/%Y %H:%M')}"
-                    if appointment.hospital and appointment.hospital != "LINE Bot":
-                        message += f" ที่ {appointment.hospital}"
+                    if appointment.location and appointment.location != "LINE Bot":
+                        message += f" ที่ {appointment.location}"
                     message += f"\n   🆔 {appointment.id}\n\n"
                 
                 if len(future_appointments) > 3:

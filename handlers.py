@@ -298,17 +298,17 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                 group_id_for_model = user_id
             
             # สร้างการนัดหมายใหม่
-            # ตอนนี้มี doctor field แยกแล้ว ไม่ต้องใส่ใน location
+            # ใช้ตัวแปรใหม่: location, building_floor_dept, contact_person, phone_number
             
             appointment = Appointment(
                 id=str(uuid.uuid4())[:8],  # สร้าง ID สั้น ๆ
                 group_id=group_id_for_model,
                 datetime_iso=appointment_datetime.isoformat(),
-                hospital=hospital,
-                department=department,
-                doctor=doctor if doctor != "ไม่ระบุ" else "",
-                note=title,
-                location=location
+                location=hospital,  # โรงพยาบาล -> สถานที่
+                building_floor_dept=department,  # แผนก -> อาคาร/แผนก/ชั้น
+                contact_person=doctor if doctor != "ไม่ระบุ" else "",  # แพทย์ -> บุคคล/ผู้ติดต่อ
+                phone_number="",  # เบอร์โทรใหม่ (ยังไม่มีการ parse)
+                note=title
             )
             
             logger.info(f"Created appointment: {appointment.to_dict()}")
@@ -336,13 +336,13 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
 🆔 รหัส: {appointment.id}
 📅 วันเวลา: {date_str}"""
                     
-                    # เพิ่มชื่อหมอถ้ามี
+                    # เพิ่มชื่อผู้ติดต่อถ้ามี
                     if doctor != "ไม่ระบุ":
-                        result_message += f"\n👨‍⚕️ แพทย์: {doctor}"
+                        result_message += f"\n� บุคคล/ผู้ติดต่อ: {doctor}"
                     
                     result_message += f"""
-🏥 โรงพยาบาล: {hospital}
-🔖 แผนก: {department}
+📍 สถานที่: {hospital}
+🏢 อาคาร/แผนก/ชั้น: {department}
 
 ✅ ข้อมูลถูกบันทึกแล้ว
 🔔 ระบบจะแจ้งเตือน 7 วัน และ 1 วันก่อนนัดหมาย"""
@@ -439,12 +439,14 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
             
             appointment_list += f"📅 {i}. {status_icon} {appointment.note}\n"
             appointment_list += f"     🕐 {date_str}\n"
-            if appointment.hospital and appointment.hospital != "LINE Bot":
-                appointment_list += f"     🏥 {appointment.hospital}\n"
-            if appointment.department and appointment.department != "General":
-                appointment_list += f"     🏢 {appointment.department}\n"
-            if getattr(appointment, 'doctor', None) and appointment.doctor:
-                appointment_list += f"     👨‍⚕️ {appointment.doctor}\n"
+            if appointment.location and appointment.location != "LINE Bot":
+                appointment_list += f"     📍 {appointment.location}\n"
+            if appointment.building_floor_dept and appointment.building_floor_dept != "General":
+                appointment_list += f"     🏢 {appointment.building_floor_dept}\n"
+            if getattr(appointment, 'contact_person', None) and appointment.contact_person:
+                appointment_list += f"     � {appointment.contact_person}\n"
+            if getattr(appointment, 'phone_number', None) and appointment.phone_number:
+                appointment_list += f"     📞 {appointment.phone_number}\n"
             appointment_list += f"     🆔 {appointment.id}\n\n"
         
         # เพิ่มข้อความถ้ามีการนัดหมายมากกว่าที่แสดง
@@ -560,7 +562,7 @@ def handle_delete_appointment_command(user_message: str, user_id: str, context_t
 • ชื่อ: {target_appointment.title}
 • วันที่: {target_appointment.date}
 • เวลา: {target_appointment.time}
-• หมอ: {target_appointment.doctor}"""
+• บุคคล/ผู้ติดต่อ: {target_appointment.contact_person}"""
                             else:
                                 final_message = f"❌ ไม่สามารถลบนัดหมายรหัส {appointment_id} ได้ กรุณาลองใหม่อีกครั้ง"
                         
@@ -693,9 +695,10 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
         field_patterns = {
             'title': r'ชื่อนัดหมาย:\s*["\']([^"\']+)["\']',
             'datetime': r'วันเวลา:\s*["\']([^"\']+)["\']',
-            'doctor': r'แพทย์:\s*["\']([^"\']+)["\']',
-            'hospital': r'โรงพยาบาล:\s*["\']([^"\']+)["\']',
-            'department': r'แผนก:\s*["\']([^"\']+)["\']'
+            'contact_person': r'(?:แพทย์|บุคคล|ผู้ติดต่อ):\s*["\']([^"\']+)["\']',
+            'location': r'(?:โรงพยาบาล|สถานที่):\s*["\']([^"\']+)["\']',
+            'building_floor_dept': r'(?:แผนก|อาคาร|ชั้น):\s*["\']([^"\']+)["\']',
+            'phone_number': r'(?:เบอร์โทร|โทรศัพท์):\s*["\']([^"\']+)["\']'
         }
         
         changes_made = []
@@ -727,26 +730,32 @@ def handle_edit_appointment_command(user_message: str, user_id: str, context_typ
 • "15/11/2025 09:30"
 • "2025-12-25 10:15" """
                         
-                elif field_name == 'doctor':
-                    updated_fields['doctor'] = new_value
-                    changes_made.append(f"• แพทย์: {getattr(target_appointment, 'doctor', 'ไม่ระบุ')} → {new_value}")
+                elif field_name == 'contact_person':
+                    updated_fields['contact_person'] = new_value
+                    changes_made.append(f"• บุคคล/ผู้ติดต่อ: {getattr(target_appointment, 'contact_person', 'ไม่ระบุ')} → {new_value}")
                     
-                elif field_name == 'hospital':
-                    updated_fields['hospital'] = new_value
-                    changes_made.append(f"• โรงพยาบาล: {getattr(target_appointment, 'hospital', 'ไม่ระบุ')} → {new_value}")
+                elif field_name == 'location':
+                    updated_fields['location'] = new_value
+                    changes_made.append(f"• สถานที่: {getattr(target_appointment, 'location', 'ไม่ระบุ')} → {new_value}")
                     
-                elif field_name == 'department':
-                    updated_fields['department'] = new_value
-                    changes_made.append(f"• แผนก: {getattr(target_appointment, 'department', 'ไม่ระบุ')} → {new_value}")
-
+                elif field_name == 'building_floor_dept':
+                    updated_fields['building_floor_dept'] = new_value
+                    changes_made.append(f"• อาคาร/แผนก/ชั้น: {getattr(target_appointment, 'building_floor_dept', 'ไม่ระบุ')} → {new_value}")
+                    
+                elif field_name == 'phone_number':
+                    updated_fields['phone_number'] = new_value
+                    changes_made.append(f"• เบอร์โทร: {getattr(target_appointment, 'phone_number', 'ไม่ระบุ')} → {new_value}")
+                    
         if not updated_fields:
             return """❌ ไม่พบข้อมูลที่ต้องการแก้ไข
 
 📝 รูปแบบที่ถูกต้อง:
 ชื่อนัดหมาย:"ตรวจร่างกาย"
 วันเวลา:"8 ตุลาคม 2025 14:00"
-แพทย์:"ดร.สมชาย"
-โรงพยาบาล:"ศิริราช"
+บุคคล:"ดร.สมชาย"
+สถานที่:"ศิริราช"
+อาคาร:"อาคาร 1 ชั้น 3"
+เบอร์โทร:"02-419-7000"
 แผนก:"อายุรกรรม" """
 
         # อัพเดทนัดหมาย

@@ -17,11 +17,11 @@ class Appointment:
         id (str): รหัสเฉพาะของการนัดหมาย (UUID หรือ auto-generated)
         group_id (str): รหัสกลุ่ม LINE ที่จะรับการแจ้งเตือน
         datetime_iso (str): วันเวลานัดหมายในรูปแบบ ISO 8601 (YYYY-MM-DDTHH:MM:SS)
-        hospital (str): ชื่อโรงพยาบาล/สถานพยาบาล
-        department (str): แผนก/หน่วยงาน
-        doctor (str): ชื่อแพทย์ผู้ให้บริการ
+        location (str): สถานที่นัดหมาย
+        building_floor_dept (str): อาคาร/แผนก/ชั้น
+        contact_person (str): บุคคล/ผู้ติดต่อ
+        phone_number (str): เบอร์โทร
         note (str): หมายเหตุเพิ่มเติม
-        location (str): สถานที่/ห้อง/อาคาร
         lead_days (List[int]): จำนวนวันก่อนนัดที่จะแจ้งเตือน เช่น [7, 3, 1]
         notified_flags (List[bool]): สถานะการแจ้งเตือนแต่ละระยะ (ตรงกับ lead_days)
         created_at (str): วันเวลาที่สร้างการนัดหมายในรูปแบบ ISO 8601
@@ -32,10 +32,11 @@ class Appointment:
             id="12345",
             group_id="Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
             datetime_iso="2025-10-15T14:30:00",
-            hospital="โรงพยาบาลรามาธิบดี",
-            department="แผนกอายุรกรรม",
+            location="โรงพยาบาลรามาธิบดี",
+            building_floor_dept="อาคาร 1 ชั้น 3 แผนกอายุรกรรม",
+            contact_person="ดร.สมชาย ใจดี",
+            phone_number="02-123-4567",
             note="ตรวจสุขภาพประจำปี",
-            location="อาคาร 1 ชั้น 3 ห้อง 301",
             lead_days=[7, 3, 1],
             notified_flags=[False, False, False],
             created_at="2025-09-27T10:00:00",
@@ -45,15 +46,31 @@ class Appointment:
     id: str
     group_id: str
     datetime_iso: str
-    hospital: str
-    department: str
-    doctor: str = ""
+    location: str
+    building_floor_dept: str
+    contact_person: str = ""
+    phone_number: str = ""
     note: str = ""
-    location: str = ""
     lead_days: List[int] = field(default_factory=lambda: [7, 3, 1])
     notified_flags: List[bool] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    
+    # Properties สำหรับ backward compatibility
+    @property
+    def hospital(self) -> str:
+        """Backward compatibility: alias สำหรับ location"""
+        return self.location
+    
+    @property
+    def department(self) -> str:
+        """Backward compatibility: alias สำหรับ building_floor_dept"""
+        return self.building_floor_dept
+    
+    @property
+    def doctor(self) -> str:
+        """Backward compatibility: alias สำหรับ contact_person"""
+        return self.contact_person
     
     def __post_init__(self):
         """

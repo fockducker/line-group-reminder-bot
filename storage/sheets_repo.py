@@ -116,8 +116,8 @@ class SheetsRepository:
                 )
                 # เพิ่ม header row
                 headers = [
-                    'id', 'group_id', 'datetime_iso', 'hospital', 'department',
-                    'doctor', 'note', 'location', 'lead_days', 'notified_flags',
+                    'id', 'group_id', 'datetime_iso', 'location', 'building_floor_dept',
+                    'contact_person', 'phone_number', 'note', 'lead_days', 'notified_flags',
                     'created_at', 'updated_at'
                 ]
                 worksheet.append_row(headers)
@@ -231,11 +231,11 @@ class SheetsRepository:
                             id=record.get('id'),
                             group_id=record.get('group_id'),
                             datetime_iso=record.get('datetime_iso'),
-                            hospital=record.get('hospital', ''),
-                            department=record.get('department', ''),
-                            doctor=record.get('doctor', ''),
+                            location=record.get('location', record.get('hospital', '')),  # Backward compatibility
+                            building_floor_dept=record.get('building_floor_dept', record.get('department', '')),  # Backward compatibility
+                            contact_person=record.get('contact_person', record.get('doctor', '')),  # Backward compatibility
+                            phone_number=record.get('phone_number', ''),
                             note=record.get('note', ''),
-                            location=record.get('location', ''),
                             lead_days=lead_days,
                             notified_flags=notified_flags,
                             created_at=record.get('created_at', ''),
@@ -273,8 +273,8 @@ class SheetsRepository:
             
             # หา header row ที่ถูกต้อง (ไม่ซ้ำ)
             expected_headers = [
-                'id', 'group_id', 'datetime_iso', 'hospital', 'department',
-                'doctor', 'note', 'location', 'lead_days', 'notified_flags',
+                'id', 'group_id', 'datetime_iso', 'location', 'building_floor_dept',
+                'contact_person', 'phone_number', 'note', 'lead_days', 'notified_flags',
                 'created_at', 'updated_at'
             ]
             
@@ -313,11 +313,11 @@ class SheetsRepository:
                             id=record.get('id'),
                             group_id=record.get('group_id'),
                             datetime_iso=record.get('datetime_iso'),
-                            hospital=record.get('hospital', ''),
-                            department=record.get('department', ''),
-                            doctor=record.get('doctor', ''),
+                            location=record.get('location', record.get('hospital', '')),  # Backward compatibility
+                            building_floor_dept=record.get('building_floor_dept', record.get('department', '')),  # Backward compatibility
+                            contact_person=record.get('contact_person', record.get('doctor', '')),  # Backward compatibility
+                            phone_number=record.get('phone_number', ''),
                             note=record.get('note', ''),
-                            location=record.get('location', ''),
                             lead_days=lead_days,
                             notified_flags=notified_flags,
                             created_at=record.get('created_at', ''),
