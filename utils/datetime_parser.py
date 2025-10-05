@@ -279,15 +279,15 @@ class SmartDateTimeParser:
             specialty = match.group(1).strip()
             contact_person_name = f"หมอ{specialty}"
             text = text[:match.start()] + text[match.end():]
-            return doctor_name, text.strip()
+            return contact_person_name, text.strip()
         
-        # 4. ตรวจหา doctor title only (หมอ, นพ, ดร)
-        match = re.search(self.doctor_patterns['doctor_title'], text)
+        # 4. ตรวจหา contact title only (หมอ, นพ, ดร)
+        match = re.search(self.contact_person_patterns['contact_title'], text)
         if match:
             title = match.group(1).strip()
-            doctor_name = title
+            contact_person_name = title
             text = text[:match.start()] + text[match.end():]
-            return doctor_name, text.strip()
+            return contact_person_name, text.strip()
         
         return None, text
     
