@@ -303,25 +303,40 @@ class SmartDateTimeParser:
         """
         
         # ตรวจสอบว่ามี structured format หรือไม่
-        if 'ชื่อนัดหมาย:' not in text and 'วันเวลา:' not in text:
+        # รองรับหลายรูปแบบ: ชื่อนัดหมาย/นัดหมาย และ วันเวลา/วันที่+เวลา
+        has_title = any(keyword in text for keyword in ['ชื่อนัดหมาย:', 'นัดหมาย:'])
+        has_datetime = any(keyword in text for keyword in ['วันเวลา:', 'วันที่:', 'เวลา:'])
+        
+        if not (has_title or has_datetime):
             return None
             
         logger.info(f"Parsing structured appointment: {text}")
         
         # แยกแต่ละ field (รองรับทั้งรูปแบบเก่าและใหม่)
-        title = self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\r\n]+)["\']?')
-        datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\r\n]+)["\']?')
+        title = (self._extract_field(text, r'(?:ชื่อนัดหมาย|นัดหมาย):\s*["\']?([^"\'\r\n]+)["\']?') or
+                self._extract_field(text, r'ชื่อนัดหมาย:\s*["\']?([^"\'\r\n]+)["\']?'))
         
-        # Contact person (รองรับทั้งแพทย์, บุคคล, ผู้ติดต่อ)
-        contact_person = (self._extract_field(text, r'(?:แพทย์|บุคคล|ผู้ติดต่อ):\s*["\']?([^"\'\r\n]+)["\']?') or
+        # วันเวลา (รองรับทั้ง วันเวลา: หรือ วันที่: + เวลา: แยกกัน)
+        datetime_str = self._extract_field(text, r'วันเวลา:\s*["\']?([^"\'\r\n]+)["\']?')
+        if not datetime_str:
+            # ลองรวม วันที่ + เวลา
+            date_part = self._extract_field(text, r'วันที่:\s*["\']?([^"\'\r\n]+)["\']?')
+            time_part = self._extract_field(text, r'เวลา:\s*["\']?([^"\'\r\n]+)["\']?')
+            if date_part and time_part:
+                datetime_str = f"{date_part} {time_part}"
+            elif date_part:
+                datetime_str = date_part
+        
+        # Contact person (รองรับทั้งแพทย์, บุคคล, ผู้ติดต่อ, บุคคล/ผู้ติดต่อ)
+        contact_person = (self._extract_field(text, r'(?:บุคคล/ผู้ติดต่อ|แพทย์|บุคคล|ผู้ติดต่อ):\s*["\']?([^"\'\r\n]+)["\']?') or
                          self._extract_field(text, r'แพทย์:\s*["\']?([^"\'\r\n]+)["\']?'))
         
         # Location (รองรับทั้งโรงพยาบาล, สถานที่)
         location = (self._extract_field(text, r'(?:โรงพยาบาล|สถานที่):\s*["\']?([^"\'\r\n]+)["\']?') or
                    self._extract_field(text, r'โรงพยาบาล:\s*["\']?([^"\'\r\n]+)["\']?'))
         
-        # Building/Floor/Department (รองรับทั้งแผนก, อาคาร, ชั้น)
-        building_floor_dept = (self._extract_field(text, r'(?:แผนก|อาคาร|ชั้น):\s*["\']?([^"\'\r\n]+)["\']?') or
+        # Building/Floor/Department (รองรับทั้งแผนก, อาคาร, ชั้น, อาคาร/แผนก/ชั้น)
+        building_floor_dept = (self._extract_field(text, r'(?:อาคาร/แผนก/ชั้น|แผนก|อาคาร|ชั้น):\s*["\']?([^"\'\r\n]+)["\']?') or
                               self._extract_field(text, r'แผนก:\s*["\']?([^"\'\r\n]+)["\']?'))
         
         # Phone number (ใหม่)
