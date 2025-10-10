@@ -282,7 +282,7 @@ class NotificationService:
 🏢 อาคาร/แผนก/ชั้น: {appointment.building_floor_dept}"""
             
             if hasattr(appointment, 'contact_person') and appointment.contact_person:
-                message += f"\n� บุคคล/ผู้ติดต่อ: {appointment.contact_person}"
+                message += f"\n👤 บุคคล/ผู้ติดต่อ: {appointment.contact_person}"
             
             if hasattr(appointment, 'phone_number') and appointment.phone_number:
                 message += f"\n📞 เบอร์โทร: {appointment.phone_number}"

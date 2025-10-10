@@ -125,7 +125,7 @@ class SimpleParserTester:
         self.clear_input_button.pack(side=tk.LEFT, padx=4)
 
         # History section (right)
-        history_frame = ttk.LabelFrame(lower_frame, text="�️ History (ไม่บันทึกถาวร)", padding="8")
+        history_frame = ttk.LabelFrame(lower_frame, text="🗂️ History (ไม่บันทึกถาวร)", padding="8")
         history_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         cols = ("idx","title","date","time","location","building","contact","phone","confidence")
@@ -230,10 +230,8 @@ class SimpleParserTester:
     def run_parser(self, text: str) -> dict:
         """Run underlying parser (real or fallback) and normalize output."""
         try:
-            import sys
-            if 'utils' not in sys.path:
-                sys.path.append('utils')
-            from enhanced_smart_parser import EnhancedSmartDateTimeParser
+            # Prefer absolute package import
+            from utils.enhanced_smart_parser import EnhancedSmartDateTimeParser
             parser = EnhancedSmartDateTimeParser()
             result = parser.extract_appointment_info(text)
             clean_result = {
@@ -250,6 +248,7 @@ class SimpleParserTester:
             self.status_var.set(f"✅ Parse สำเร็จ - Confidence: {clean_result.get('confidence', 0):.2f}")
             return clean_result
         except Exception:
+            # Fallback to demo if parser import/execution fails
             demo = test_parser()
             self.status_var.set("⚠️ Demo mode (parser import failed)")
             return demo

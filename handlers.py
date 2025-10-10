@@ -209,7 +209,7 @@ def get_help_text(context_type: str = "personal") -> str:
 • เพิ่มนัด ประชุม 24 ตุลาคม บ่ายสาม at CentralWorld
 • เพิ่มนัด ไปเที่ยว 1 ม.ค. 26 เช้า
 
-� ใช้เดือนไทยเต็ม/ย่อ/ภาษาพูดได้ เช่น ตุลา พฤศจิกา ธันวา
+        📌 ใช้เดือนไทยเต็ม/ย่อ/ภาษาพูดได้ เช่น ตุลา พฤศจิกา ธันวา
 📌 ปี พ.ศ. แปลงเป็น ค.ศ. อัตโนมัติ (เช่น 2569 → 2026)'''
     
     if context_type == "group":
@@ -463,7 +463,7 @@ def handle_list_appointments_command(user_id: str, context_type: str, context_id
             if appointment.building_floor_dept and appointment.building_floor_dept != "General":
                 appointment_list += f"     🏢 {appointment.building_floor_dept}\n"
             if getattr(appointment, 'contact_person', None) and appointment.contact_person:
-                appointment_list += f"     � {appointment.contact_person}\n"
+                appointment_list += f"     👤 {appointment.contact_person}\n"
             if getattr(appointment, 'phone_number', None) and appointment.phone_number:
                 appointment_list += f"     📞 {appointment.phone_number}\n"
             appointment_list += f"     🆔 {appointment.id}\n\n"
