@@ -320,7 +320,14 @@ def handle_add_appointment_command(user_message: str, user_id: str, context_type
                     import pytz
                     bangkok_tz = pytz.timezone('Asia/Bangkok')
                     now = datetime.now(bangkok_tz)
-                    is_past_appointment = appointment.appointment_datetime < now
+                    apt_dt = appointment.appointment_datetime
+                    # Normalize appointment datetime to Asia/Bangkok if naive
+                    if apt_dt.tzinfo is None:
+                        try:
+                            apt_dt = bangkok_tz.localize(apt_dt)
+                        except Exception:
+                            pass
+                    is_past_appointment = apt_dt < now
                     
                     # สร้างข้อความตอบกลับ
                     if is_past_appointment:

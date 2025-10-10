@@ -5,6 +5,7 @@ Data models for LINE Group Reminder Bot
 
 from dataclasses import dataclass, field
 from datetime import datetime
+import pytz
 from typing import Optional, List
 
 
@@ -96,7 +97,16 @@ class Appointment:
         Returns:
             datetime: วันเวลานัดหมาย
         """
-        return datetime.fromisoformat(self.datetime_iso)
+        dt = datetime.fromisoformat(self.datetime_iso)
+        # If naive, localize to Asia/Bangkok to keep consistency across app
+        if dt.tzinfo is None:
+            try:
+                tz = pytz.timezone('Asia/Bangkok')
+                dt = tz.localize(dt)
+            except Exception:
+                # Fallback to naive if pytz not available at runtime
+                pass
+        return dt
     
     @property
     def title(self) -> str:
@@ -138,7 +148,21 @@ class Appointment:
         Returns:
             bool: True หากนัดหมายผ่านไปแล้ว
         """
-        return self.appointment_datetime < datetime.now()
+        now = datetime.now()
+        apt_dt = self.appointment_datetime
+        # If one side is aware and the other is naive, align to Asia/Bangkok
+        if (apt_dt.tzinfo is not None) != (now.tzinfo is not None):
+            try:
+                tz = pytz.timezone('Asia/Bangkok')
+                if now.tzinfo is None:
+                    now = tz.localize(now)
+                if apt_dt.tzinfo is None:
+                    apt_dt = tz.localize(apt_dt)
+            except Exception:
+                # As last resort, drop tz info for comparison
+                now = now.replace(tzinfo=None)
+                apt_dt = apt_dt.replace(tzinfo=None)
+        return apt_dt < now
     
     def get_notification_status(self, lead_day: int) -> Optional[bool]:
         """
