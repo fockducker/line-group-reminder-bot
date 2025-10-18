@@ -322,6 +322,22 @@ class NotificationService:
             )
             
             logger.info(f"✅ Sent daily notification for appointment {appointment.id} to {appointment.group_id} (days_diff: {days_diff})")
+            # Persist notified flag for this lead day if it exists in appointment.lead_days
+            try:
+                if isinstance(appointment.lead_days, list) and days_diff in appointment.lead_days:
+                    idx = appointment.lead_days.index(days_diff)
+                    # update in-memory and persist to Sheets
+                    appointment.notified_flags[idx] = True
+                    # Determine context for update
+                    context = f"group_{appointment.group_id}" if appointment.group_id and appointment.group_id.startswith('C') else 'personal'
+                    updated = {'notified_flags': str(appointment.notified_flags)}
+                    try:
+                        self.sheets_repo.update_appointment(appointment.id, context, updated)
+                        logger.info(f"Persisted notified_flags for appointment {appointment.id} (lead_day={days_diff})")
+                    except Exception as e:
+                        logger.warning(f"Failed to persist notified_flags for {appointment.id}: {e}")
+            except Exception:
+                pass
             
         except Exception as e:
             logger.error(f"❌ Failed to send daily notification for appointment {appointment.id}: {e}")
@@ -428,6 +444,28 @@ class NotificationService:
             )
             
             logger.info(f"✅ Sent daily notification summary to {recipient_id}")
+            # Persist notified flags for appointments that match lead days
+            try:
+                for appointment in appointments:
+                    try:
+                        apt_date = appointment.appointment_datetime
+                        if apt_date.tzinfo is None:
+                            apt_date = apt_date.replace(tzinfo=BANGKOK_TZ)
+                        days_diff = (apt_date.date() - current_time.date()).days
+                        if isinstance(appointment.lead_days, list) and days_diff in appointment.lead_days:
+                            idx = appointment.lead_days.index(days_diff)
+                            appointment.notified_flags[idx] = True
+                            context = f"group_{appointment.group_id}" if appointment.group_id and appointment.group_id.startswith('C') else 'personal'
+                            updated = {'notified_flags': str(appointment.notified_flags)}
+                            try:
+                                self.sheets_repo.update_appointment(appointment.id, context, updated)
+                                logger.info(f"Persisted notified_flags for appointment {appointment.id} after summary send (lead_day={days_diff})")
+                            except Exception as e:
+                                logger.warning(f"Failed to persist notified_flags (summary) for {appointment.id}: {e}")
+                    except Exception:
+                        continue
+            except Exception:
+                pass
             
         except Exception as e:
             logger.error(f"❌ Failed to send daily notification summary to {recipient_id}: {e}")
