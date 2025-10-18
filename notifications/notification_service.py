@@ -39,22 +39,35 @@ class NotificationService:
         self.scheduler = BackgroundScheduler(timezone=BANGKOK_TZ)
         self.sheets_repo = SheetsRepository()
         self._notification_running = False  # ป้องกันการรันซ้ำ
-        
-        # ตั้งค่า scheduler ให้ทำงานทุกวันเวลา 09:00
-        self.scheduler.add_job(
-            func=self.check_and_send_notifications,
-            trigger=CronTrigger(hour=9, minute=0, timezone=BANGKOK_TZ),
-            id='daily_notification_check',
-            name='Daily Notification Check',
-            replace_existing=True,
-            max_instances=1  # จำกัดให้รันได้แค่ instance เดียว
-        )
-        
-        logger.info("NotificationService initialized with daily scheduler at 09:00 Bangkok time")
+
+        # Do NOT automatically register the job here. Registration is done when start_scheduler()
+        # is explicitly called. This prevents multiple process instances from each scheduling
+        # the same job (which causes duplicate notifications when the app is scaled).
+        logger.info("NotificationService initialized (scheduler created, job not registered yet)")
     
     def start_scheduler(self):
         """เริ่มต้น background scheduler"""
         try:
+            # Only start the scheduler if the environment explicitly allows it. This avoids
+            # running the job in multiple processes when the app is scaled.
+            import os
+            start_flag = os.getenv('START_NOTIFICATION_SCHEDULER', 'false').lower()
+            if start_flag not in ('1', 'true', 'yes'):
+                logger.info("START_NOTIFICATION_SCHEDULER not enabled; scheduler will not start in this process")
+                return
+
+            # Register the daily job if not present
+            existing_jobs = {j.id for j in self.scheduler.get_jobs()} if self.scheduler else set()
+            if 'daily_notification_check' not in existing_jobs:
+                self.scheduler.add_job(
+                    func=self.check_and_send_notifications,
+                    trigger=CronTrigger(hour=9, minute=0, timezone=BANGKOK_TZ),
+                    id='daily_notification_check',
+                    name='Daily Notification Check',
+                    replace_existing=True,
+                    max_instances=1
+                )
+
             if not self.scheduler.running:
                 self.scheduler.start()
                 logger.info("Notification scheduler started successfully")

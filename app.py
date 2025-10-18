@@ -49,12 +49,17 @@ try:
         register_handlers(handler, line_bot_api)
         print("✅ LINE Bot handlers registered successfully")
         
-        # เริ่มต้น Notification Service
+        # เริ่มต้น Notification Service (แต่สั่งให้ start scheduler เฉพาะเมื่อ env var อนุญาต)
         if NOTIFICATION_ENABLED:
             try:
                 notification_service = NotificationService(line_bot_api)
-                notification_service.start_scheduler()
-                print("✅ Notification scheduler started successfully")
+                # Only start the scheduler explicitly when START_NOTIFICATION_SCHEDULER env var is truthy
+                start_flag = os.getenv('START_NOTIFICATION_SCHEDULER', 'false').lower()
+                if start_flag in ('1', 'true', 'yes'):
+                    notification_service.start_scheduler()
+                    print("✅ Notification scheduler started successfully")
+                else:
+                    print("⚠️ Notification service initialized but scheduler not started in this process (set START_NOTIFICATION_SCHEDULER=1 to enable)")
             except Exception as e:
                 print(f"❌ Failed to start notification service: {e}")
                 notification_service = None
